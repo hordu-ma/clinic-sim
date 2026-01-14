@@ -9,5 +9,9 @@ wheels/
 # Virtual environments
 .venv
 
+# Environment variables
+.env
+.env.production
+
 # MCP server files
 .serena 
