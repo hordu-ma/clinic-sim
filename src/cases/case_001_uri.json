@@ -1,0 +1,64 @@
+{
+  "title": "急性上呼吸道感染",
+  "difficulty": "easy",
+  "department": "内科",
+  "patient_info": {
+    "age": 28,
+    "gender": "男",
+    "occupation": "程序员"
+  },
+  "chief_complaint": "发热、咽痛 3 天",
+  "present_illness": "患者 3 天前受凉后出现发热，体温最高 38.5°C，伴咽痛、轻度咳嗽，无痰。无鼻塞、流涕。无头痛、肌肉酸痛。食欲稍差，睡眠可。自服退热药后体温可暂时下降，但仍反复发热。",
+  "past_history": {
+    "diseases": [],
+    "allergies": [],
+    "medications": []
+  },
+  "physical_exam": {
+    "visible": {
+      "temperature": "38.5°C",
+      "pulse": "90次/分",
+      "respiration": "18次/分",
+      "blood_pressure": "120/75 mmHg",
+      "general": "急性病容，精神可"
+    },
+    "on_request": {
+      "throat": "咽部充血，扁桃体I度肿大，无脓性分泌物",
+      "lung": "双肺呼吸音清，未闻及干湿性啰音",
+      "heart": "心率90次/分，律齐，各瓣膜听诊区未闻及病理性杂音",
+      "abdomen": "腹软，无压痛、反跳痛，肝脾未触及"
+    }
+  },
+  "available_tests": [
+    {
+      "type": "blood_routine",
+      "name": "血常规",
+      "result": {
+        "wbc": "12.5 × 10^9/L (↑)",
+        "neutrophil": "75% (↑)",
+        "lymphocyte": "20%",
+        "hemoglobin": "145 g/L",
+        "platelet": "220 × 10^9/L"
+      }
+    },
+    {
+      "type": "crp",
+      "name": "C反应蛋白",
+      "result": {
+        "value": "25 mg/L (↑)"
+      }
+    }
+  ],
+  "standard_diagnosis": {
+    "primary": "急性上呼吸道感染（急性咽炎）",
+    "differential": ["急性扁桃体炎", "流行性感冒"]
+  },
+  "key_points": [
+    "发热时程和特点",
+    "咽痛症状",
+    "咽部体征（充血、扁桃体肿大）",
+    "白细胞和中性粒细胞升高",
+    "排除流感和扁桃体炎"
+  ],
+  "recommended_tests": ["blood_routine", "crp"]
+}
