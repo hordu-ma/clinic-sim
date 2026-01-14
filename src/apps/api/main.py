@@ -5,8 +5,17 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from .config import settings
+from .exceptions import setup_exception_handlers
+from .logging_config import logger, setup_logging
+from .middleware import RequestLoggingMiddleware, TraceIdMiddleware
+from .rate_limit import limiter
+
+# 初始化日志系统
+setup_logging()
 
 # 创建 FastAPI 应用
 app = FastAPI(
@@ -17,6 +26,19 @@ app = FastAPI(
     redoc_url="/redoc" if settings.ENV == "dev" else None,
 )
 
+# 配置限流器
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# 注册全局异常处理器
+setup_exception_handlers(app)
+
+# 添加中间件（注意顺序：后添加的先执行）
+# 1. 请求日志中间件
+app.add_middleware(RequestLoggingMiddleware)
+# 2. Trace ID 中间件（最先执行，确保 trace_id 可用）
+app.add_middleware(TraceIdMiddleware)
+
 # CORS 配置
 app.add_middleware(
     CORSMiddleware,
@@ -25,6 +47,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+logger.info("FastAPI 应用初始化完成")
 
 
 # 健康检查端点
@@ -60,8 +84,3 @@ app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(cases.router, prefix="/api/cases", tags=["cases"])
 app.include_router(sessions.router, prefix="/api/sessions", tags=["sessions"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
-
-# TODO: 其他路由待实现
-# from .routes import sessions, chat
-# app.include_router(sessions.router, prefix="/api/sessions", tags=["sessions"])
-# app.include_router(chat.router, prefix="/api/chat", tags=["chat"])

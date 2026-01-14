@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.apps.api.config import settings
 from src.apps.api.dependencies import get_current_user, get_db
+from src.apps.api.logging_config import logger
 from src.apps.api.models import User
 from src.apps.api.schemas.auth import LoginCredentials, Token, UserResponse
 from src.apps.api.utils.jwt import create_access_token
@@ -80,6 +81,7 @@ async def login(
     user = await authenticate_user(db, credentials.username, credentials.password)
 
     if not user:
+        logger.warning("登录失败", username=credentials.username, reason="用户名或密码错误")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="用户名或密码错误",
@@ -93,6 +95,7 @@ async def login(
         expires_delta=access_token_expires,
     )
 
+    logger.info("用户登录成功", user_id=user.id, username=user.username)
     return Token(access_token=access_token, token_type="bearer")
 
 

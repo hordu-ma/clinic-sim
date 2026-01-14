@@ -9,14 +9,16 @@ import time
 from collections.abc import AsyncGenerator
 
 import httpx
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from src.apps.api.config import settings
 from src.apps.api.dependencies import CurrentUser, DbSession
+from src.apps.api.logging_config import logger
 from src.apps.api.models import Case, Message, Session
+from src.apps.api.rate_limit import limiter
 from src.apps.api.schemas.chat import ChatRequest
 
 router = APIRouter()
@@ -159,7 +161,9 @@ def estimate_tokens(text: str) -> int:
 
 
 @router.post("/")
+@limiter.limit("20/minute")
 async def chat_stream(
+    request: Request,
     data: ChatRequest,
     db: DbSession,
     current_user: CurrentUser,
@@ -167,8 +171,10 @@ async def chat_stream(
     """SSE 流式对话接口。
 
     学生（医生角色）发送问诊消息，LLM（病人角色）流式返回回答。
+    限流：每用户每分钟最多 20 次请求。
 
     Args:
+        request: FastAPI Request 对象（限流需要）
         data: 聊天请求（session_id, message）
         db: 数据库会话
         current_user: 当前用户
@@ -304,9 +310,19 @@ async def chat_stream(
                     save_db.add(assistant_msg)
 
                     await save_db.commit()
-                except Exception:
+                    logger.debug(
+                        "对话消息已保存",
+                        session_id=data.session_id,
+                        latency_ms=latency_ms,
+                    )
+                except Exception as e:
                     # 落库失败不影响用户体验，但应记录日志
                     await save_db.rollback()
+                    logger.error(
+                        "保存对话消息失败",
+                        session_id=data.session_id,
+                        error=str(e),
+                    )
 
         # 发送最终的 [DONE] 信号
         yield "data: [DONE]\n\n"
