@@ -26,7 +26,18 @@ fi
 echo "Starting vLLM with model: $MODEL_PATH"
 echo "Host: $HOST  Port: $PORT  Max len: $MAX_MODEL_LEN  GPU mem util: $GPU_MEMORY_UTILIZATION  Max seqs: $MAX_NUM_SEQS"
 
-python -m vllm.entrypoints.openai.api_server \
+# 使用项目虚拟环境中的 python
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PYTHON_CMD="$PROJECT_ROOT/.venv/bin/python"
+
+if [ ! -f "$PYTHON_CMD" ]; then
+  echo "Project venv not found: $PYTHON_CMD" >&2
+  echo "Please run 'uv sync' first." >&2
+  exit 1
+fi
+
+$PYTHON_CMD -m vllm.entrypoints.openai.api_server \
   --model "$MODEL_PATH" \
   --host "$HOST" \
   --port "$PORT" \

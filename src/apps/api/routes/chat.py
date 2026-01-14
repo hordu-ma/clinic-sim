@@ -1,19 +1,320 @@
 """聊天相关路由。
 
 提供 SSE 流式对话功能。
+核心实现：学生问诊，LLM 扮演病人回答。
 """
 
-from fastapi import APIRouter
+import json
+import time
+from collections.abc import AsyncGenerator
+
+import httpx
+from fastapi import APIRouter, HTTPException, status
+from fastapi.responses import StreamingResponse
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+
+from src.apps.api.config import settings
+from src.apps.api.dependencies import CurrentUser, DbSession
+from src.apps.api.models import Case, Message, Session
+from src.apps.api.schemas.chat import ChatRequest
 
 router = APIRouter()
 
+# 系统提示词模板（固定角色约束）
+SYSTEM_PROMPT = """你是一名患者，正在接受医生问诊。
 
-# TODO: 实现流式对话接口
-# @router.post("/")
-# async def chat_stream(
-#     session_id: int,
-#     message: str,
-#     current_user: User = Depends(get_current_user),
-# ):
-#     """SSE 流式对话接口。"""
-#     pass
+重要约束：
+1. 你只能以患者身份回答，绝对不能给出任何医学诊断或建议
+2. 只回答医生直接询问的问题
+3. 不要主动提供未被询问的信息
+4. 使用普通人的语言描述症状，不要使用医学术语
+5. 回答要简洁自然，像真实患者一样交流
+6. 如果医生问诊断相关问题，回答"我不懂，我就是来看病的"
+"""
+
+
+def build_developer_prompt(case: Case) -> str:
+    """构建开发者提示词（包含病例信息）。
+
+    Args:
+        case: 病例对象
+
+    Returns:
+        开发者提示词字符串
+    """
+    # 提取体格检查中可透露的信息
+    physical_exam = case.physical_exam or {}
+    visible_signs = physical_exam.get("visible", {})
+    on_request_signs = physical_exam.get("on_request", {})
+
+    # 格式化可见体征
+    visible_str = (
+        "\n".join(f"  - {k}: {v}" for k, v in visible_signs.items())
+        if visible_signs
+        else "  - 无明显异常"
+    )
+
+    # 格式化按需体征（医生检查时才显示）
+    on_request_str = (
+        "\n".join(f"  - {k}: {v}" for k, v in on_request_signs.items())
+        if on_request_signs
+        else "  - 无特殊发现"
+    )
+
+    # 提取患者信息
+    patient_info = case.patient_info or {}
+    age = patient_info.get("age", "未知")
+    gender = patient_info.get("gender", "未知")
+    occupation = patient_info.get("occupation", "未知")
+
+    # 既往史
+    past_history = case.past_history or {}
+    diseases = past_history.get("diseases", [])
+    allergies = past_history.get("allergies", [])
+    medications = past_history.get("medications", [])
+
+    return f"""你扮演的患者信息：
+- 年龄：{age}岁
+- 性别：{"男" if gender == "male" else "女" if gender == "female" else gender}
+- 职业：{occupation}
+
+主诉：{case.chief_complaint}
+
+现病史：{case.present_illness}
+
+既往史：
+- 疾病史：{", ".join(diseases) if diseases else "无"}
+- 过敏史：{", ".join(allergies) if allergies else "无"}
+- 用药史：{", ".join(medications) if medications else "无"}
+
+可见体征（医生一眼能看到的）：
+{visible_str}
+
+体格检查结果（医生检查时你要描述的感受）：
+{on_request_str}
+
+记住：
+1. 按患者的理解方式描述症状
+2. 只有医生检查或询问时才透露相关信息
+3. 不要一次说太多，要自然交流
+"""
+
+
+def build_messages(
+    case: Case,
+    history: list[Message],
+    user_message: str,
+) -> list[dict]:
+    """构建发送给 LLM 的消息列表。
+
+    Args:
+        case: 病例对象
+        history: 历史消息列表
+        user_message: 用户当前消息
+
+    Returns:
+        OpenAI 格式的消息列表
+    """
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": build_developer_prompt(case)},
+    ]
+
+    # 添加历史消息（最近 20 条）
+    recent_history = history[-20:] if len(history) > 20 else history
+    for msg in recent_history:
+        messages.append(
+            {
+                "role": msg.role,
+                "content": msg.content,
+            }
+        )
+
+    # 添加当前用户消息
+    messages.append(
+        {
+            "role": "user",
+            "content": user_message,
+        }
+    )
+
+    return messages
+
+
+def estimate_tokens(text: str) -> int:
+    """估算文本的 token 数量。
+
+    简单估算：中文约 1.5 字符/token，英文约 4 字符/token
+    混合文本取中间值
+
+    Args:
+        text: 输入文本
+
+    Returns:
+        估算的 token 数
+    """
+    # 简单方法：字符数 / 2
+    return max(1, len(text) // 2)
+
+
+@router.post("/")
+async def chat_stream(
+    data: ChatRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> StreamingResponse:
+    """SSE 流式对话接口。
+
+    学生（医生角色）发送问诊消息，LLM（病人角色）流式返回回答。
+
+    Args:
+        data: 聊天请求（session_id, message）
+        db: 数据库会话
+        current_user: 当前用户
+
+    Returns:
+        StreamingResponse: SSE 流式响应
+
+    Raises:
+        HTTPException: 403 如果用户无权访问会话
+        HTTPException: 404 如果会话不存在
+        HTTPException: 400 如果会话已结束
+    """
+    # 1. 查询会话（包含病例和历史消息）
+    result = await db.execute(
+        select(Session)
+        .options(
+            selectinload(Session.case),
+            selectinload(Session.messages),
+        )
+        .where(Session.id == data.session_id)
+    )
+    session = result.scalar_one_or_none()
+
+    if session is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found",
+        )
+
+    # 2. 权限检查
+    if session.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied",
+        )
+
+    # 3. 检查会话状态
+    if session.status != "in_progress":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Session is {session.status}, cannot continue chat",
+        )
+
+    # 4. 构建消息
+    case = session.case
+    history = sorted(session.messages, key=lambda m: m.created_at)
+    messages = build_messages(case, history, data.message)
+
+    # 5. 创建 SSE 生成器
+    async def event_generator() -> AsyncGenerator[str, None]:
+        full_response = ""
+        start_time = time.time()
+        user_tokens = estimate_tokens(data.message)
+
+        try:
+            async with httpx.AsyncClient(timeout=settings.LLM_TIMEOUT) as client:
+                async with client.stream(
+                    "POST",
+                    f"{settings.LLM_BASE_URL}/v1/chat/completions",
+                    json={
+                        "model": settings.LLM_MODEL,
+                        "messages": messages,
+                        "stream": True,
+                        "temperature": settings.LLM_TEMPERATURE,
+                        "max_tokens": settings.LLM_MAX_TOKENS,
+                    },
+                ) as response:
+                    if response.status_code != 200:
+                        error_text = await response.aread()
+                        yield f"data: {json.dumps({'error': f'LLM error: {error_text.decode()}'})}\n\n"
+                        return
+
+                    async for line in response.aiter_lines():
+                        if not line:
+                            continue
+
+                        if line.startswith("data: "):
+                            data_str = line[6:]
+
+                            if data_str.strip() == "[DONE]":
+                                break
+
+                            try:
+                                chunk = json.loads(data_str)
+                                content = (
+                                    chunk.get("choices", [{}])[0]
+                                    .get("delta", {})
+                                    .get("content", "")
+                                )
+                                if content:
+                                    full_response += content
+                                    yield f"data: {json.dumps({'content': content, 'done': False})}\n\n"
+                            except json.JSONDecodeError:
+                                continue
+
+        except httpx.TimeoutException:
+            yield f"data: {json.dumps({'error': 'LLM request timeout'})}\n\n"
+            return
+        except httpx.RequestError as e:
+            yield f"data: {json.dumps({'error': f'LLM connection error: {str(e)}'})}\n\n"
+            return
+
+        # 6. 流式结束，发送完成信号
+        latency_ms = int((time.time() - start_time) * 1000)
+        yield f"data: {json.dumps({'content': '', 'done': True, 'latency_ms': latency_ms})}\n\n"
+
+        # 7. 落库：保存用户消息和助手回复
+        if full_response:
+            # 使用新的数据库会话来保存消息（避免上下文管理器问题）
+            from src.apps.api.dependencies import AsyncSessionLocal
+
+            async with AsyncSessionLocal() as save_db:
+                try:
+                    # 保存用户消息
+                    user_msg = Message(
+                        session_id=data.session_id,
+                        role="user",
+                        content=data.message,
+                        tokens=user_tokens,
+                    )
+                    save_db.add(user_msg)
+
+                    # 保存助手回复
+                    assistant_msg = Message(
+                        session_id=data.session_id,
+                        role="assistant",
+                        content=full_response,
+                        tokens=estimate_tokens(full_response),
+                        latency_ms=latency_ms,
+                    )
+                    save_db.add(assistant_msg)
+
+                    await save_db.commit()
+                except Exception:
+                    # 落库失败不影响用户体验，但应记录日志
+                    await save_db.rollback()
+
+        # 发送最终的 [DONE] 信号
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # 禁用 Nginx 缓冲
+        },
+    )
