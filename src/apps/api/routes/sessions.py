@@ -1,14 +1,18 @@
-"""会话相关路由。
-
-提供会话创建、查询、历史记录等功能。
-"""
+from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from src.apps.api.dependencies import CurrentUser, DbSession
-from src.apps.api.models import Case, Message, Session, TestRequest
+from src.apps.api.models import Case, Message, Score, Session, TestRequest
+from src.apps.api.schemas.scores import (
+    DiagnosisSubmit,
+    DiagnosisSubmitResponse,
+    ScoreDimensions,
+    ScoreResponse,
+    ScoringDetails,
+)
 from src.apps.api.schemas.sessions import (
     MessageItem,
     SessionCreate,
@@ -23,6 +27,7 @@ from src.apps.api.schemas.tests import (
     TestRequestListResponse,
     TestRequestResponse,
 )
+from src.apps.api.services.scoring import ScoringService
 
 router = APIRouter()
 
@@ -384,11 +389,190 @@ async def list_session_tests(
     return TestRequestListResponse(items=items, total=len(items))
 
 
-# TODO: Day 25-27 实现提交诊断接口
-# @router.post("/{session_id}/submit")
-# async def submit_diagnosis(...)
+@router.post("/{session_id}/submit", response_model=DiagnosisSubmitResponse)
+async def submit_diagnosis(
+    session_id: int,
+    data: DiagnosisSubmit,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> DiagnosisSubmitResponse:
+    """提交诊断并获取评分。
+
+    Args:
+        session_id: 会话ID
+        data: 诊断提交请求数据
+        db: 数据库会话
+        current_user: 当前用户
+
+    Returns:
+        提交结果和评分报告
+
+    Raises:
+        HTTPException: 404 如果会话不存在
+        HTTPException: 403 如果用户无权访问
+        HTTPException: 400 如果会话已提交
+        HTTPException: 409 如果已有评分记录
+    """
+    # 查询会话（包含病例、消息、检查申请）
+    result = await db.execute(
+        select(Session)
+        .options(
+            selectinload(Session.case),
+            selectinload(Session.messages),
+            selectinload(Session.test_requests),
+            selectinload(Session.score),
+        )
+        .where(Session.id == session_id)
+    )
+    session = result.scalar_one_or_none()
+
+    if session is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found",
+        )
+
+    # 权限检查
+    if session.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied",
+        )
+
+    # 检查会话状态
+    if session.status != "in_progress":
+        # 如果已提交，返回已有评分
+        if session.score:
+            return DiagnosisSubmitResponse(
+                session_id=session.id,
+                status=session.status,
+                submitted_diagnosis=session.submitted_diagnosis or "",
+                score=_build_score_response(session.score),
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Session has already been submitted",
+        )
+
+    # 计算评分
+    score_result = ScoringService.calculate_score(
+        session=session,
+        case=session.case,
+        messages=list(session.messages),
+        test_requests=list(session.test_requests),
+        submitted_diagnosis=data.diagnosis,
+    )
+
+    # 更新会话状态
+    session.status = "submitted"
+    session.submitted_diagnosis = data.diagnosis
+    session.ended_at = datetime.utcnow()
+
+    # 创建评分记录
+    score = Score(
+        session_id=session.id,
+        total_score=score_result.total_score,
+        dimensions=score_result.dimensions,
+        scoring_details=score_result.details,
+        scoring_method="rule_based",
+        model_version=None,
+    )
+    db.add(score)
+
+    await db.commit()
+    await db.refresh(session)
+    await db.refresh(score)
+
+    return DiagnosisSubmitResponse(
+        session_id=session.id,
+        status=session.status,
+        submitted_diagnosis=data.diagnosis,
+        score=_build_score_response(score),
+    )
 
 
-# TODO: Day 25-27 实现查看评分接口
-# @router.get("/{session_id}/score")
-# async def get_score(...)
+@router.get("/{session_id}/score", response_model=ScoreResponse)
+async def get_session_score(
+    session_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> ScoreResponse:
+    """获取会话评分详情。
+
+    Args:
+        session_id: 会话ID
+        db: 数据库会话
+        current_user: 当前用户
+
+    Returns:
+        评分详情
+
+    Raises:
+        HTTPException: 404 如果会话不存在或未评分
+        HTTPException: 403 如果用户无权访问
+    """
+    # 查询会话（包含评分）
+    result = await db.execute(
+        select(Session).options(selectinload(Session.score)).where(Session.id == session_id)
+    )
+    session = result.scalar_one_or_none()
+
+    if session is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found",
+        )
+
+    # 权限检查
+    if session.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied",
+        )
+
+    # 检查是否有评分
+    if session.score is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Score not found. Please submit diagnosis first.",
+        )
+
+    return _build_score_response(session.score)
+
+
+def _build_score_response(score: Score) -> ScoreResponse:
+    """构建评分响应对象。
+
+    Args:
+        score: 评分模型对象
+
+    Returns:
+        评分响应 schema
+    """
+    dimensions = score.dimensions or {}
+    details = score.scoring_details or {}
+
+    return ScoreResponse(
+        id=score.id,
+        session_id=score.session_id,
+        total_score=float(score.total_score),
+        dimensions=ScoreDimensions(
+            interview_completeness=dimensions.get("interview_completeness", 0),
+            test_appropriateness=dimensions.get("test_appropriateness", 0),
+            diagnosis_accuracy=dimensions.get("diagnosis_accuracy", 0),
+        ),
+        scoring_details=ScoringDetails(
+            keywords_asked=details.get("keywords_asked", []),
+            key_points_covered=details.get("key_points_covered", []),
+            key_points_total=details.get("key_points_total", []),
+            tests_requested=details.get("tests_requested", []),
+            recommended_tests=details.get("recommended_tests", []),
+            diagnosis_keywords_matched=details.get("diagnosis_keywords_matched", []),
+            standard_diagnosis=details.get("standard_diagnosis", ""),
+            submitted_diagnosis=details.get("submitted_diagnosis", ""),
+            scoring_rule_version=details.get("scoring_rule_version", "1.0"),
+        ),
+        scoring_method=score.scoring_method,
+        model_version=score.model_version,
+        scored_at=score.scored_at,
+    )

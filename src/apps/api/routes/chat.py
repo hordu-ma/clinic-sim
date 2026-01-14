@@ -238,7 +238,8 @@ async def chat_stream(
                 ) as response:
                     if response.status_code != 200:
                         error_text = await response.aread()
-                        yield f"data: {json.dumps({'error': f'LLM error: {error_text.decode()}'})}\n\n"
+                        err_msg = f"LLM error: {error_text.decode()}"
+                        yield f"data: {json.dumps({'error': err_msg})}\n\n"
                         return
 
                     async for line in response.aiter_lines():
@@ -260,7 +261,8 @@ async def chat_stream(
                                 )
                                 if content:
                                     full_response += content
-                                    yield f"data: {json.dumps({'content': content, 'done': False})}\n\n"
+                                    chunk_data = {"content": content, "done": False}
+                                    yield f"data: {json.dumps(chunk_data)}\n\n"
                             except json.JSONDecodeError:
                                 continue
 
