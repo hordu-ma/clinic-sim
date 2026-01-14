@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from src.apps.api.dependencies import CurrentUser, DbSession
-from src.apps.api.models import Case, Message, Session
+from src.apps.api.models import Case, Message, Session, TestRequest
 from src.apps.api.schemas.sessions import (
     MessageItem,
     SessionCreate,
@@ -16,6 +16,12 @@ from src.apps.api.schemas.sessions import (
     SessionListItem,
     SessionListResponse,
     SessionResponse,
+)
+from src.apps.api.schemas.tests import (
+    TestRequestCreate,
+    TestRequestListItem,
+    TestRequestListResponse,
+    TestRequestResponse,
 )
 
 router = APIRouter()
@@ -215,19 +221,172 @@ async def get_session(
     )
 
 
-# TODO: Day 22-24 实现提交诊断接口
+@router.post(
+    "/{session_id}/tests",
+    response_model=TestRequestResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def request_test(
+    session_id: int,
+    data: TestRequestCreate,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> TestRequestResponse:
+    """申请检查。
+
+    Args:
+        session_id: 会话ID
+        data: 检查申请请求数据
+        db: 数据库会话
+        current_user: 当前用户
+
+    Returns:
+        检查申请结果
+
+    Raises:
+        HTTPException: 404 如果会话不存在
+        HTTPException: 403 如果用户无权访问
+        HTTPException: 400 如果检查类型无效或会话已结束
+        HTTPException: 409 如果检查已申请过
+    """
+    # 查询会话（包含病例信息）
+    result = await db.execute(
+        select(Session).options(selectinload(Session.case)).where(Session.id == session_id)
+    )
+    session = result.scalar_one_or_none()
+
+    if session is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found",
+        )
+
+    # 权限检查
+    if session.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied",
+        )
+
+    # 检查会话状态
+    if session.status != "in_progress":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot request test for a completed session",
+        )
+
+    # 验证检查类型是否在病例可用检查中
+    available_tests = session.case.available_tests or []
+    test_info = None
+    for test in available_tests:
+        if test.get("type") == data.test_type:
+            test_info = test
+            break
+
+    if test_info is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid test type: {data.test_type}. Not available for this case.",
+        )
+
+    # 检查是否已申请过该检查（可配置允许重复）
+    existing_result = await db.execute(
+        select(TestRequest).where(
+            TestRequest.session_id == session_id,
+            TestRequest.test_type == data.test_type,
+        )
+    )
+    existing_test = existing_result.scalar_one_or_none()
+
+    if existing_test is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Test '{data.test_type}' has already been requested for this session",
+        )
+
+    # 创建检查申请记录
+    test_request = TestRequest(
+        session_id=session_id,
+        test_type=data.test_type,
+        test_name=test_info.get("name", data.test_type),
+        result=test_info.get("result", {}),
+    )
+    db.add(test_request)
+    await db.commit()
+    await db.refresh(test_request)
+
+    return TestRequestResponse(
+        id=test_request.id,
+        session_id=test_request.session_id,
+        test_type=test_request.test_type,
+        test_name=test_request.test_name,
+        result=test_request.result,
+        requested_at=test_request.requested_at,
+    )
+
+
+@router.get("/{session_id}/tests", response_model=TestRequestListResponse)
+async def list_session_tests(
+    session_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> TestRequestListResponse:
+    """获取会话已申请的检查列表。
+
+    Args:
+        session_id: 会话ID
+        db: 数据库会话
+        current_user: 当前用户
+
+    Returns:
+        已申请检查列表
+
+    Raises:
+        HTTPException: 404 如果会话不存在
+        HTTPException: 403 如果用户无权访问
+    """
+    # 查询会话
+    session_result = await db.execute(select(Session).where(Session.id == session_id))
+    session = session_result.scalar_one_or_none()
+
+    if session is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found",
+        )
+
+    # 权限检查
+    if session.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied",
+        )
+
+    # 查询已申请的检查
+    result = await db.execute(
+        select(TestRequest)
+        .where(TestRequest.session_id == session_id)
+        .order_by(TestRequest.requested_at)
+    )
+    tests = result.scalars().all()
+
+    items = [
+        TestRequestListItem(
+            id=test.id,
+            test_type=test.test_type,
+            test_name=test.test_name,
+            result=test.result,
+            requested_at=test.requested_at,
+        )
+        for test in tests
+    ]
+
+    return TestRequestListResponse(items=items, total=len(items))
+
+
+# TODO: Day 25-27 实现提交诊断接口
 # @router.post("/{session_id}/submit")
 # async def submit_diagnosis(...)
-
-
-# TODO: Day 22-24 实现申请检查接口
-# @router.post("/{session_id}/tests")
-# async def request_test(...)
-
-
-# TODO: Day 22-24 实现查看检查结果接口
-# @router.get("/{session_id}/tests")
-# async def list_tests(...)
 
 
 # TODO: Day 25-27 实现查看评分接口

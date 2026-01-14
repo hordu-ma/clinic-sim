@@ -11,6 +11,14 @@ from src.apps.api.schemas.sessions import (
     SessionListResponse,
     SessionResponse,
 )
+from src.apps.api.schemas.tests import (
+    AvailableTestItem,
+    AvailableTestsResponse,
+    TestRequestCreate,
+    TestRequestListItem,
+    TestRequestListResponse,
+    TestRequestResponse,
+)
 
 __all__ = [
     "LoginCredentials",
@@ -28,4 +36,10 @@ __all__ = [
     "ChatRequest",
     "ChatChunk",
     "ChatComplete",
+    "TestRequestCreate",
+    "TestRequestResponse",
+    "TestRequestListItem",
+    "TestRequestListResponse",
+    "AvailableTestItem",
+    "AvailableTestsResponse",
 ]
