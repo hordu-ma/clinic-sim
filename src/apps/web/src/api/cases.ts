@@ -1,36 +1,31 @@
-import request from './request'
-
-export interface Case {
-  id: number
-  title: string
-  chief_complaint: string
-  department: string
-  difficulty: string
-  visit_time: string
-}
-
-export interface AvailableTestItem {
-  type: string
-  name: string
-}
-
-export interface AvailableTestsResponse {
-  case_id: number
-  items: AvailableTestItem[]
-  total: number
-}
+import request from "./request";
+import type {
+  CaseListItem,
+  AvailableTestItem,
+  AvailableTestsResponse,
+} from "../types";
 
 // 获取病例列表
-export function getCaseList(params?: any) {
-  return request.get<any, Case[]>('/cases', { params })
+export function getCaseList(params?: {
+  difficulty?: string;
+  department?: string;
+  skip?: number;
+  limit?: number;
+}) {
+  return request.get<any, CaseListItem[]>("/cases/", { params });
 }
 
 // 获取病例详情
 export function getCaseDetail(id: number) {
-  return request.get<any, Case>(`/cases/${id}`)
+  return request.get<any, CaseListItem>(`/cases/${id}`);
 }
 
 // 获取可用检查
 export function getAvailableTests(caseId: number) {
-  return request.get<any, AvailableTestsResponse>(`/cases/${caseId}/available-tests`)
+  return request.get<any, AvailableTestsResponse>(
+    `/cases/${caseId}/available-tests`
+  );
 }
+
+// Re-export types
+export type { CaseListItem, AvailableTestItem, AvailableTestsResponse };

@@ -1,23 +1,29 @@
 <script setup lang="ts">
-import { ref, nextTick, onMounted } from "vue";
+import { ref, nextTick, onMounted, computed } from "vue";
 import { useRoute } from "vue-router";
 import { useUserStore } from "../stores/user";
 import {
   getSession,
-  getSessionMessages,
   applyTest,
   submitDiagnosis,
+  type SessionDetail,
+  type DiagnosisSubmitResponse,
 } from "../api/session";
 import { getAvailableTests, type AvailableTestItem } from "../api/cases";
-import { showToast, showSuccessToast, showFailToast } from "vant";
+import { showToast, showSuccessToast, showFailToast, showDialog } from "vant";
+import type { MessageItem } from "../types";
 
 const route = useRoute();
 const userStore = useUserStore();
-const sessionId = route.params.sessionId as string;
 
-const messages = ref<any[]>([]);
+// Session ID 从路由获取，后端是 int 类型
+const sessionId = computed(() => Number(route.params.sessionId));
+
+// UI State
+const messages = ref<MessageItem[]>([]);
 const inputValue = ref("");
 const sending = ref(false);
+const loadingData = ref(true);
 const messagesContainer = ref<HTMLElement | null>(null);
 
 // Action Sheet State
@@ -30,11 +36,16 @@ const actions = [
 // Test Application State
 const showTestPopup = ref(false);
 const availableTests = ref<AvailableTestItem[]>([]);
-const sessionDetail = ref<any>(null);
+const sessionDetail = ref<SessionDetail | null>(null);
 
 // Diagnosis State
 const showDiagnosisDialog = ref(false);
 const diagnosisContent = ref("");
+
+// Session status
+const isSessionEnded = computed(() => {
+  return sessionDetail.value?.status !== "in_progress";
+});
 
 const scrollToBottom = async () => {
   await nextTick();
@@ -44,25 +55,30 @@ const scrollToBottom = async () => {
 };
 
 const loadData = async () => {
+  loadingData.value = true;
   try {
-    // Load session details first to get case_id
-    sessionDetail.value = await getSession(sessionId);
+    // Load session details (includes messages)
+    const detail = await getSession(sessionId.value);
+    sessionDetail.value = detail;
+
+    // Map messages - role 类型断言为 MessageItem 兼容类型
+    messages.value = detail.messages.map((m) => ({
+      ...m,
+      role: m.role as "user" | "assistant" | "system",
+    }));
 
     // Load available tests
-    if (sessionDetail.value?.case_id) {
-      const testsRes = await getAvailableTests(sessionDetail.value.case_id);
+    if (detail.case_id) {
+      const testsRes = await getAvailableTests(detail.case_id);
       availableTests.value = testsRes.items || [];
     }
 
-    // Load message history
-    const msgs = await getSessionMessages(sessionId);
-    messages.value = msgs.map((m: any) => ({
-      ...m,
-      role: m.role,
-    }));
     scrollToBottom();
   } catch (e) {
     showFailToast("加载数据失败");
+    console.error(e);
+  } finally {
+    loadingData.value = false;
   }
 };
 
@@ -70,8 +86,12 @@ onMounted(() => {
   loadData();
 });
 
-const onSelectAction = (action: any) => {
+const onSelectAction = (action: { name: string; value: string }) => {
   showActionSheet.value = false;
+  if (isSessionEnded.value) {
+    showToast("会话已结束，无法进行此操作");
+    return;
+  }
   if (action.value === "test") {
     showTestPopup.value = true;
   } else if (action.value === "diagnosis") {
@@ -81,25 +101,22 @@ const onSelectAction = (action: any) => {
 
 const handleApplyTest = async (testItem: AvailableTestItem) => {
   try {
-    const res = await applyTest(sessionId, { test_type: testItem.type });
+    const res = await applyTest(sessionId.value, { test_type: testItem.type });
+
+    // 显示检查结果
+    const resultStr = Object.entries(res.result || {})
+      .map(([k, v]) => `${k}: ${v}`)
+      .join("; ");
+
     messages.value.push({
-      role: "assistant",
-      content: `[系统] 已申请 ${testItem.name} 检查，结果已生成。`,
+      id: Date.now(),
+      role: "system",
+      content: `[检查结果] ${res.test_name}:\n${resultStr || "无异常"}`,
+      tokens: null,
+      latency_ms: null,
+      created_at: new Date().toISOString(),
     });
-    // Add the specific result message if returned, or re-fetch messages
-    if (res && res.content) {
-      messages.value.push({
-        role: "assistant",
-        content: res.content,
-      });
-    } else {
-      // Reload messages to get the new test result message from backend
-      const msgs = await getSessionMessages(sessionId);
-      messages.value = msgs.map((m: any) => ({
-        ...m,
-        role: m.role,
-      }));
-    }
+
     showTestPopup.value = false;
     scrollToBottom();
     showSuccessToast("申请成功");
@@ -114,20 +131,46 @@ const handleSubmitDiagnosis = async () => {
     return;
   }
   try {
-    const res = await submitDiagnosis(sessionId, {
-      diagnosis: diagnosisContent.value,
-    });
+    const res: DiagnosisSubmitResponse = await submitDiagnosis(
+      sessionId.value,
+      {
+        diagnosis: diagnosisContent.value,
+      }
+    );
     showDiagnosisDialog.value = false;
 
-    // Show score result
-    if (res) {
-      let resultMsg = `诊断已提交。\n得分: ${res.total_score}\n评价: ${res.feedback}`;
-      messages.value.push({
-        role: "system",
-        content: resultMsg,
-      });
-      scrollToBottom();
+    // Update session status
+    if (sessionDetail.value) {
+      sessionDetail.value.status = res.status;
     }
+
+    // Show score result in dialog
+    const score = res.score;
+    await showDialog({
+      title: "评分结果",
+      message: `
+总分: ${score.total_score.toFixed(1)} 分
+
+问诊完整性: ${score.dimensions.interview_completeness.toFixed(1)}
+检查合理性: ${score.dimensions.test_appropriateness.toFixed(1)}
+诊断准确性: ${score.dimensions.diagnosis_accuracy.toFixed(1)}
+
+覆盖关键点: ${score.scoring_details.key_points_covered.join(", ") || "无"}
+标准诊断: ${score.scoring_details.standard_diagnosis}
+      `.trim(),
+      confirmButtonText: "确定",
+    });
+
+    // Add system message
+    messages.value.push({
+      id: Date.now(),
+      role: "system",
+      content: `[诊断提交] 总分: ${score.total_score.toFixed(1)} 分`,
+      tokens: null,
+      latency_ms: null,
+      created_at: new Date().toISOString(),
+    });
+    scrollToBottom();
   } catch (e) {
     showFailToast("提交失败");
   }
@@ -136,22 +179,37 @@ const handleSubmitDiagnosis = async () => {
 const sendMessage = async () => {
   if (!inputValue.value.trim() || sending.value) return;
 
+  if (isSessionEnded.value) {
+    showToast("会话已结束，无法发送消息");
+    return;
+  }
+
   const content = inputValue.value.trim();
+
+  // Optimistic UI: add user message
   messages.value.push({
+    id: Date.now(),
     role: "user",
     content: content,
+    tokens: null,
+    latency_ms: null,
+    created_at: new Date().toISOString(),
   });
   inputValue.value = "";
   scrollToBottom();
 
   sending.value = true;
 
-  // 创建 assistant 消息占位
-  const assistantMsg = ref({
+  // Create placeholder for assistant response
+  const assistantMsgIndex = messages.value.length;
+  messages.value.push({
+    id: Date.now() + 1,
     role: "assistant",
     content: "",
+    tokens: null,
+    latency_ms: null,
+    created_at: new Date().toISOString(),
   });
-  messages.value.push(assistantMsg.value);
 
   try {
     const response = await fetch("/api/chat/", {
@@ -161,13 +219,16 @@ const sendMessage = async () => {
         Authorization: `Bearer ${userStore.token}`,
       },
       body: JSON.stringify({
-        session_id: sessionId,
+        session_id: sessionId.value,
         message: content,
       }),
     });
 
     if (!response.ok) {
-      assistantMsg.value.content = "请求失败: " + response.statusText;
+      const assistantMsg = messages.value[assistantMsgIndex];
+      if (assistantMsg) {
+        assistantMsg.content = "请求失败: " + response.statusText;
+      }
       return;
     }
 
@@ -189,17 +250,21 @@ const sendMessage = async () => {
           try {
             const parsed = JSON.parse(data);
             if (parsed.content) {
-              assistantMsg.value.content += parsed.content;
-              scrollToBottom();
+              const assistantMsg = messages.value[assistantMsgIndex];
+              if (assistantMsg) {
+                assistantMsg.content += parsed.content;
+                scrollToBottom();
+              }
             }
           } catch (e) {
-            console.error("Parse error", e);
+            // Ignore parse errors for partial chunks
           }
         }
       }
     }
   } catch (e) {
-    assistantMsg.value.content = "网络错误";
+    const assistantMsg = messages.value[assistantMsgIndex];
+    if (assistantMsg) assistantMsg.content = "网络错误，请重试";
   } finally {
     sending.value = false;
     scrollToBottom();
@@ -210,19 +275,39 @@ const sendMessage = async () => {
 <template>
   <div class="chat-page">
     <van-nav-bar
-      title="问诊室"
+      :title="sessionDetail?.case_title || '问诊室'"
       left-arrow
       @click-left="$router.back()"
       fixed
       placeholder
-      right-text="操作"
-      @click-right="showActionSheet = true"
-    />
+    >
+      <template #right>
+        <van-icon name="ellipsis" size="20" @click="showActionSheet = true" />
+      </template>
+    </van-nav-bar>
 
-    <div class="message-list" ref="messagesContainer">
+    <!-- Session status banner -->
+    <van-notice-bar
+      v-if="isSessionEnded"
+      color="#1989fa"
+      background="#ecf9ff"
+      left-icon="info-o"
+    >
+      会话已{{
+        sessionDetail?.status === "submitted" ? "提交" : "评分"
+      }}，仅供查看
+    </van-notice-bar>
+
+    <!-- Loading -->
+    <van-loading v-if="loadingData" class="loading-center" size="24px" vertical>
+      加载中...
+    </van-loading>
+
+    <div v-else class="message-list" ref="messagesContainer">
+      <van-empty v-if="messages.length === 0" description="开始问诊吧" />
       <div
         v-for="(msg, index) in messages"
-        :key="index"
+        :key="msg.id || index"
         :class="['message-item', msg.role]"
       >
         <div class="avatar">
@@ -234,16 +319,24 @@ const sendMessage = async () => {
       </div>
     </div>
 
-    <div class="input-area">
-      <van-field v-model="inputValue" center clearable placeholder="请输入问题">
+    <div class="input-area" v-if="!isSessionEnded">
+      <van-field
+        v-model="inputValue"
+        center
+        clearable
+        placeholder="请输入问题"
+        @keyup.enter="sendMessage"
+      >
         <template #button>
           <van-button
             size="small"
             type="primary"
             :loading="sending"
+            :disabled="sending || !inputValue.trim()"
             @click="sendMessage"
-            >发送</van-button
           >
+            发送
+          </van-button>
         </template>
       </van-field>
     </div>
@@ -252,6 +345,7 @@ const sendMessage = async () => {
     <van-action-sheet
       v-model:show="showActionSheet"
       :actions="actions"
+      cancel-text="取消"
       @select="onSelectAction"
     />
 
@@ -269,6 +363,10 @@ const sendMessage = async () => {
           :title="item.name"
           is-link
           @click="handleApplyTest(item)"
+        />
+        <van-empty
+          v-if="availableTests.length === 0"
+          description="暂无可用检查"
         />
       </van-cell-group>
     </van-popup>
@@ -297,6 +395,12 @@ const sendMessage = async () => {
   height: 100vh;
   display: flex;
   flex-direction: column;
+}
+.loading-center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .message-list {
   flex: 1;

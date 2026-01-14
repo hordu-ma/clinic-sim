@@ -1,16 +1,20 @@
-import request from "./request";
+import request from './request'
+import type { Token, UserResponse } from '../types'
 
-export const login = (data: any) => {
-  return request({
-    url: "/auth/login",
-    method: "post",
-    data,
-  });
-};
+export interface LoginParams {
+  username: string
+  password: string
+}
 
-export const getUserInfo = () => {
-  return request({
-    url: "/auth/me",
-    method: "get",
-  });
-};
+// 登录
+export function login(data: LoginParams) {
+  return request.post<any, Token>('/auth/login', data)
+}
+
+// 获取当前用户信息
+export function getUserInfo() {
+  return request.get<any, UserResponse>('/auth/me')
+}
+
+// Re-export types
+export type { Token, UserResponse }

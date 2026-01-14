@@ -1,42 +1,47 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { useRouter } from "vue-router";
-import { getCaseList } from "../api/cases";
+import { getCaseList, type CaseListItem } from "../api/cases";
 import { createSession } from "../api/session";
-import { showLoadingToast } from "vant";
+import { showLoadingToast, showFailToast } from "vant";
 
 const router = useRouter();
-const cases = ref<any[]>([]);
+const cases = ref<CaseListItem[]>([]);
 const loading = ref(false);
 const finished = ref(false);
 
 const onLoad = async () => {
-  if (cases.value.length > 0) return;
+  if (cases.value.length > 0) {
+    finished.value = true;
+    loading.value = false;
+    return;
+  }
 
   try {
-    const res: any = await getCaseList();
-    cases.value = res.items || [];
+    // 后端返回数组，不是 { items: [...] }
+    const res = await getCaseList();
+    cases.value = res;
     finished.value = true;
   } catch (e) {
     console.error(e);
-    // finished.value = true // Avoid infinite loop on error
-    loading.value = false;
+    showFailToast("加载病例失败");
   } finally {
     loading.value = false;
   }
 };
 
-const onSelectCase = async (item: any) => {
+const onSelectCase = async (item: CaseListItem) => {
   const toast = showLoadingToast({
     message: "创建会话中...",
     forbidClick: true,
   });
 
   try {
-    const res: any = await createSession({ case_id: item.id });
+    const res = await createSession({ case_id: item.id });
     toast.close();
-    router.push(`/chat/${res.id}`); // 注意：后端返回 session_id 字段可能是 id 或 session_id，需确认。这里假设是 id based on Model
+    router.push(`/chat/${res.id}`);
   } catch (e) {
+    toast.close();
     // error handled in interceptor
   }
 };

@@ -1,72 +1,64 @@
 import request from "./request";
-
-export interface Session {
-  id: string;
-  case_id: string;
-  user_id: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Message {
-  id: string;
-  session_id: string;
-  role: "user" | "assistant" | "system";
-  content: string;
-  created_at: string;
-}
-
-export interface CreateSessionParams {
-  case_id: string;
-}
-
-export interface ApplyTestParams {
-  test_type: string;
-}
-
-export interface SubmitDiagnosisParams {
-  diagnosis: string;
-}
-
-export interface SessionResult {
-  total_score: number;
-  feedback: string;
-  details: Record<string, any>;
-}
+import type {
+  SessionResponse,
+  SessionListResponse,
+  SessionListItem,
+  SessionDetail,
+  TestRequestCreate,
+  TestRequestResponse,
+  DiagnosisSubmitRequest,
+  DiagnosisSubmitResponse,
+} from "../types";
 
 // 获取会话列表
-export function getSessions() {
-  return request.get<any, Session[]>("/sessions");
+export function getSessions(params?: {
+  status?: string;
+  skip?: number;
+  limit?: number;
+}) {
+  return request.get<any, SessionListResponse>("/sessions/", { params });
 }
 
 // 创建会话
-export function createSession(data: CreateSessionParams) {
-  return request.post<any, Session>("/sessions", data);
+export function createSession(data: { case_id: number }) {
+  return request.post<any, SessionResponse>("/sessions/", data);
 }
 
 // 获取会话详情
-export function getSession(sessionId: string) {
-  return request.get<any, Session>(`/sessions/${sessionId}`);
+export function getSession(sessionId: number) {
+  return request.get<any, SessionDetail>(`/sessions/${sessionId}`);
 }
 
-// 获取会话消息历史
-export function getSessionMessages(sessionId: string) {
-  return request.get<any, Message[]>(`/sessions/${sessionId}/messages`);
+// 获取会话消息历史（从 SessionDetail 中获取）
+export function getSessionMessages(sessionId: number) {
+  return getSession(sessionId).then((res) => res.messages);
 }
 
 // 申请检查
-export function applyTest(sessionId: string, data: ApplyTestParams) {
-  return request.post<any, Message>(`/sessions/${sessionId}/tests`, data);
+export function applyTest(sessionId: number, data: TestRequestCreate) {
+  return request.post<any, TestRequestResponse>(
+    `/sessions/${sessionId}/tests`,
+    data
+  );
 }
 
 // 提交诊断
 export function submitDiagnosis(
-  sessionId: string,
-  data: SubmitDiagnosisParams
+  sessionId: number,
+  data: DiagnosisSubmitRequest
 ) {
-  return request.post<any, SessionResult>(
-    `/sessions/${sessionId}/diagnosis`,
+  return request.post<any, DiagnosisSubmitResponse>(
+    `/sessions/${sessionId}/submit`,
     data
   );
 }
+
+// Re-export types for convenience
+export type {
+  SessionResponse,
+  SessionListResponse,
+  SessionListItem,
+  SessionDetail,
+  TestRequestResponse,
+  DiagnosisSubmitResponse,
+};
