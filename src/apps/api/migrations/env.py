@@ -2,9 +2,8 @@ import sys
 from logging.config import fileConfig
 from pathlib import Path
 
-from sqlalchemy import engine_from_config, pool
-
 from alembic import context
+from sqlalchemy import engine_from_config, pool
 
 # 添加项目根目录到 Python 路径
 project_root = Path(__file__).resolve().parents[4]  # 回到 clinic-sim 根目录

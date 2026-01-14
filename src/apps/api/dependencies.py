@@ -68,43 +68,47 @@ async def get_current_user(
     try:
         # 解码 JWT
         payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
-        user_id: int | None = payload.get("sub")
+        user_id_str: str | None = payload.get("sub")
 
-        if user_id is None:
+        if user_id_str is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token: missing user_id",
             )
+
+        # 转换为整数
+        user_id = int(user_id_str)
 
     except jwt.ExpiredSignatureError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token expired",
         ) from e
-    except jwt.InvalidTokenError as e:
+    except (jwt.InvalidTokenError, ValueError) as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token",
         ) from e
 
-    # TODO: 从数据库加载用户
-    # from sqlalchemy import select
-    # result = await db.execute(select(User).where(User.id == user_id))
-    # user = result.scalar_one_or_none()
-    #
-    # if user is None:
-    #     raise HTTPException(status_code=404, detail="User not found")
-    #
-    # if not user.is_active:
-    #     raise HTTPException(status_code=403, detail="User is inactive")
-    #
-    # return user
+    # 从数据库加载用户
+    from sqlalchemy import select
 
-    # 临时：返回模拟用户（待实现数据库查询）
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="User authentication not fully implemented yet",
-    )
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User is inactive",
+        )
+
+    return user
 
 
 # 依赖注入类型别名

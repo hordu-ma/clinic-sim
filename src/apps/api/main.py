@@ -53,9 +53,13 @@ async def root() -> dict[str, str]:
     }
 
 
-# TODO: 注册路由
-# from .routes import auth, cases, sessions, chat
-# app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+# 注册路由
+from .routes import auth  # noqa: E402
+
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+
+# TODO: 其他路由待实现
+# from .routes import cases, sessions, chat
 # app.include_router(cases.router, prefix="/api/cases", tags=["cases"])
 # app.include_router(sessions.router, prefix="/api/sessions", tags=["sessions"])
 # app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
