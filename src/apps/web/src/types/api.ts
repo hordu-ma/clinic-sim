@@ -22,10 +22,23 @@ export interface UserResponse {
 export interface CaseListItem {
   id: number;
   title: string;
-  chief_complaint: string;
-  department: string;
   difficulty: string;
-  visit_time: string;
+  department: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface CaseDetail {
+  id: number;
+  title: string;
+  difficulty: string;
+  department: string;
+  patient_info: Record<string, unknown>;
+  chief_complaint: string;
+  present_illness: string;
+  past_history: Record<string, unknown>;
+  physical_exam: Record<string, unknown>;
+  available_tests: Record<string, unknown>[];
 }
 
 export interface AvailableTestItem {

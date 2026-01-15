@@ -160,6 +160,18 @@ def estimate_tokens(text: str) -> int:
     return max(1, len(text) // 2)
 
 
+def estimate_prompt_tokens(messages: list[dict]) -> int:
+    """保守估算 prompt token 数。
+
+    Args:
+        messages: OpenAI 格式消息列表
+
+    Returns:
+        估算的 token 数（偏保守）
+    """
+    return sum(max(1, len(str(m.get("content", "")))) for m in messages)
+
+
 @router.post("/")
 @limiter.limit("20/minute")
 async def chat_stream(
@@ -222,6 +234,30 @@ async def chat_stream(
     case = session.case
     history = sorted(session.messages, key=lambda m: m.created_at)
     messages = build_messages(case, history, data.message)
+    prompt_tokens = estimate_prompt_tokens(messages)
+    available_tokens = settings.LLM_MAX_CONTEXT_LEN - prompt_tokens
+    if available_tokens < 16:
+        logger.warning(
+            "上下文过长，无法继续生成",
+            session_id=data.session_id,
+            prompt_tokens=prompt_tokens,
+            max_context=settings.LLM_MAX_CONTEXT_LEN,
+        )
+
+        async def over_limit_generator() -> AsyncGenerator[str, None]:
+            yield "data: " + json.dumps({"error": "上下文过长，请结束会话或减少消息"}) + "\n\n"
+            yield "data: [DONE]\n\n"
+
+        return StreamingResponse(
+            over_limit_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+    max_tokens = min(settings.LLM_MAX_TOKENS, available_tokens)
 
     # 5. 创建 SSE 生成器
     async def event_generator() -> AsyncGenerator[str, None]:
@@ -239,7 +275,7 @@ async def chat_stream(
                         "messages": messages,
                         "stream": True,
                         "temperature": settings.LLM_TEMPERATURE,
-                        "max_tokens": settings.LLM_MAX_TOKENS,
+                        "max_tokens": max_tokens,
                     },
                 ) as response:
                     if response.status_code != 200:

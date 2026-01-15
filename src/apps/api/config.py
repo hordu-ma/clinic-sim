@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     LLM_TIMEOUT: int = 60  # 请求超时时间（秒）
     LLM_MAX_TOKENS: int = 500  # 最大生成 token 数
     LLM_TEMPERATURE: float = 0.7
+    LLM_MAX_CONTEXT_LEN: int = 1024  # 模型最大上下文长度
 
     # JWT 配置
     JWT_SECRET: str

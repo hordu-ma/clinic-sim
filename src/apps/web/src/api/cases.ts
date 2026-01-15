@@ -1,6 +1,7 @@
 import request from "./request";
 import type {
   CaseListItem,
+  CaseDetail,
   AvailableTestItem,
   AvailableTestsResponse,
 } from "../types";
@@ -17,7 +18,7 @@ export function getCaseList(params?: {
 
 // 获取病例详情
 export function getCaseDetail(id: number) {
-  return request.get<any, CaseListItem>(`/cases/${id}`);
+  return request.get<any, CaseDetail>(`/cases/${id}`);
 }
 
 // 获取可用检查
@@ -28,4 +29,9 @@ export function getAvailableTests(caseId: number) {
 }
 
 // Re-export types
-export type { CaseListItem, AvailableTestItem, AvailableTestsResponse };
+export type {
+  CaseListItem,
+  CaseDetail,
+  AvailableTestItem,
+  AvailableTestsResponse,
+};

@@ -216,6 +216,7 @@ const sendMessage = async () => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Accept: "text/event-stream",
         Authorization: `Bearer ${userStore.token}`,
       },
       body: JSON.stringify({
@@ -225,15 +226,28 @@ const sendMessage = async () => {
     });
 
     if (!response.ok) {
+      const errData = await response.json().catch(() => null);
+      const errMsg = errData?.detail || response.statusText || "请求失败";
       const assistantMsg = messages.value[assistantMsgIndex];
       if (assistantMsg) {
-        assistantMsg.content = "请求失败: " + response.statusText;
+        assistantMsg.content = "请求失败: " + errMsg;
       }
+      showFailToast(errMsg);
+      return;
+    }
+
+    if (!response.body) {
+      const assistantMsg = messages.value[assistantMsgIndex];
+      if (assistantMsg) {
+        assistantMsg.content = "响应体为空，请稍后重试";
+      }
+      showFailToast("响应体为空，请稍后重试");
       return;
     }
 
     const reader = response.body!.getReader();
     const decoder = new TextDecoder();
+    let shouldStop = false;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -244,11 +258,24 @@ const sendMessage = async () => {
 
       for (const line of lines) {
         if (line.startsWith("data: ")) {
-          const data = line.slice(6);
-          if (data === "[DONE]") break;
+          const data = line.slice(6).trim();
+          if (!data) continue;
+          if (data === "[DONE]") {
+            shouldStop = true;
+            break;
+          }
 
           try {
             const parsed = JSON.parse(data);
+            if (parsed.error) {
+              const assistantMsg = messages.value[assistantMsgIndex];
+              if (assistantMsg) {
+                assistantMsg.content = parsed.error;
+              }
+              showFailToast(parsed.error);
+              shouldStop = true;
+              break;
+            }
             if (parsed.content) {
               const assistantMsg = messages.value[assistantMsgIndex];
               if (assistantMsg) {
@@ -256,15 +283,22 @@ const sendMessage = async () => {
                 scrollToBottom();
               }
             }
+            if (parsed.done) {
+              shouldStop = true;
+              break;
+            }
           } catch (e) {
             // Ignore parse errors for partial chunks
           }
         }
       }
+
+      if (shouldStop) break;
     }
   } catch (e) {
     const assistantMsg = messages.value[assistantMsgIndex];
     if (assistantMsg) assistantMsg.content = "网络错误，请重试";
+    showFailToast("网络错误，请重试");
   } finally {
     sending.value = false;
     scrollToBottom();
