@@ -8,14 +8,14 @@ set -euo pipefail
 MODEL_PATH="${MODEL_PATH:-/home/malig/.cache/modelscope/hub/models/Qwen/Qwen2.5-1.5B-Instruct}"
 HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-8001}"
-MAX_MODEL_LEN="${MAX_MODEL_LEN:-2048}"          # shrink to 1536/1024 if OOM
-GPU_MEMORY_UTILIZATION="${GPU_MEMORY_UTILIZATION:-0.85}"  # lower to 0.75 if tight
-MAX_NUM_SEQS="${MAX_NUM_SEQS:-3}"               # concurrent sequences cap
+MAX_MODEL_LEN="${MAX_MODEL_LEN:-1024}"          # shrink further if OOM
+GPU_MEMORY_UTILIZATION="${GPU_MEMORY_UTILIZATION:-0.7}"  # lower for 6GB GPUs
+MAX_NUM_SEQS="${MAX_NUM_SEQS:-2}"               # concurrent sequences cap
 TENSOR_PARALLEL_SIZE="${TENSOR_PARALLEL_SIZE:-1}"
-ATTN_BACKEND="${ATTN_BACKEND:-}"                # e.g., TRITON_ATTN to avoid flash kernels
-ENFORCE_EAGER="${ENFORCE_EAGER:-}"              # set to 1 to disable CUDA graphs
-DTYPE="${DTYPE:-}"                              # e.g., float16/bfloat16/auto
-EXTRA_ARGS="${EXTRA_ARGS:-}"                    # e.g., \"--enable-metrics\"
+ATTN_BACKEND="${ATTN_BACKEND:-TRITON_ATTN}"  # TRITON_ATTN avoids flash PTX issues
+ENFORCE_EAGER="${ENFORCE_EAGER:-1}"             # disable CUDA graphs by default
+DTYPE="${DTYPE:-float16}"                       # prefer smaller memory footprint
+EXTRA_ARGS="${EXTRA_ARGS:-}"                    # e.g., "--enable-metrics"
 
 if [ ! -d "$MODEL_PATH" ]; then
   echo "Model path not found: $MODEL_PATH" >&2

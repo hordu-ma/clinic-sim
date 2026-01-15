@@ -14,8 +14,8 @@ dependencies = [
   "passlib[bcrypt]>=1.7.4",
   "loguru>=0.7.2",
   "asyncpg>=0.31.0",
-  "vllm>=0.13.0",
   "slowapi>=0.1.9",
+  "vllm>=0.13.0",
 ]
 description = "临床医学模拟问诊系统 - 基于 vLLM + FastAPI"
 name = "clinic-sim"
