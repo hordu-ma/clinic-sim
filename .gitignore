@@ -13,5 +13,11 @@ wheels/
 .env
 .env.production
 
+# Tests
+tests/
+
 # MCP server files
 .serena 
+
+# .gitignore self
+.gitignore
