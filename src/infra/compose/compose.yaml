@@ -29,30 +29,6 @@ services:
     volumes:
       - minio_data:/data
 
-  api:
-    build:
-      context: ../../..
-      dockerfile: src/apps/api/Dockerfile
-    restart: unless-stopped
-    ports:
-      - "8000:8000"
-    environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://postgres:postgres@postgres:5432/clinic_sim}
-      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio:9000}
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
-      LLM_BASE_URL: ${LLM_BASE_URL:-http://host.docker.internal:8001}
-      LLM_MODEL: ${LLM_MODEL:-qwen2.5-1.5b-instruct}
-      ENV: ${ENV:-dev}
-      JWT_SECRET: ${JWT_SECRET:-dev-change-me}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      minio:
-        condition: service_started
-    volumes:
-      - ../../../src:/app/src
-
 volumes:
   pg_data:
   minio_data:
