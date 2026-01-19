@@ -1,0 +1,59 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-clinic_sim}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+
+  vllm:
+    image: vllm/vllm-openai:latest
+    restart: unless-stopped
+    runtime: nvidia
+    environment:
+      CUDA_VISIBLE_DEVICES: "${CUDA_VISIBLE_DEVICES:-0}"
+    command: >
+      --model ${VLLM_MODEL_PATH}
+      --port 8001
+      --max-model-len ${VLLM_MAX_MODEL_LEN:-8192}
+      --gpu-memory-utilization ${VLLM_GPU_MEMORY_UTILIZATION:-0.9}
+    volumes:
+      - ${VLLM_MODEL_VOLUME}:/models
+    ports:
+      - "8001:8001"
+
+  api:
+    build: ../../..
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://vllm:8001}
+      LLM_MODEL: ${LLM_MODEL}
+      ENV: ${ENV:-production}
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      - postgres
+      - minio
+      - vllm
+    ports:
+      - "8000:8000"
+
+volumes:
+  pg_data:
+  minio_data:
