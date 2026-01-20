@@ -34,6 +34,8 @@ services:
       context: ../../..
       dockerfile: src/apps/api/Dockerfile
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8000:8000"
     environment:
@@ -42,7 +44,7 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
       LLM_BASE_URL: ${LLM_BASE_URL:-http://host.docker.internal:8001}
-      LLM_MODEL: ${LLM_MODEL:-qwen2.5-1.5b-instruct}
+      LLM_MODEL: ${LLM_MODEL:-/home/malig/.cache/modelscope/hub/models/Qwen/Qwen2___5-1___5B-Instruct}
       ENV: ${ENV:-dev}
       JWT_SECRET: ${JWT_SECRET:-dev-change-me}
     depends_on:

@@ -69,3 +69,82 @@
 
 - 后端单元测试与集成测试使用 pytest
 - 集成测试覆盖登录 → 会话 → 对话 → 检查 → 评分链路，LLM 调用使用 mock
+
+---
+
+## 本地开发与测试（标准流程）
+
+> 适用于 Linux/WSL + 本地 vLLM 的开发环境
+
+1. 启动本地 vLLM（OpenAI 兼容接口，端口 8001）
+
+```bash
+cd /home/malig/code-repos/clinic-sim
+MODEL_PATH=/home/malig/.cache/modelscope/hub/models/Qwen/Qwen2___5-1___5B-Instruct \
+  src/scripts/start_vllm_dev.sh
+```
+
+- 若模型路径不同，请替换 `MODEL_PATH`
+- 可通过 `http://localhost:8001/v1/models` 查看模型 ID
+
+2. 启动后端与基础服务（PostgreSQL、MinIO、API）
+
+```bash
+cd /home/malig/code-repos/clinic-sim
+docker compose -f src/infra/compose/dev.yml up -d
+```
+
+3. 启动前端（Vite）
+
+```bash
+cd /home/malig/code-repos/clinic-sim/src/apps/web
+npm install
+npm run dev
+```
+
+4. 访问与测试
+
+- 前端：http://localhost:5173/
+- 后端：http://localhost:8000
+- 仅 dev 可用 Swagger：http://localhost:8000/docs
+
+5. 测试账号
+
+- 用户名：`student1`
+- 密码：`password123`
+
+> 注意：Linux/WSL 下需保证 `host.docker.internal` 可解析；dev.yml 已通过 `extra_hosts` 处理。
+
+---
+
+## 生产部署调整（A/B 双机）
+
+1. 采用生产编排
+
+- 入口层（A 服务器）：`src/infra/compose/prod-a.yml`
+- 核心层（B 服务器）：`src/infra/compose/prod-b.yml`
+
+2. 关键环境变量（必须显式设置）
+
+- `POSTGRES_PASSWORD`
+- `MINIO_ROOT_PASSWORD`
+- `JWT_SECRET`
+- `LLM_BASE_URL`（指向 B 服务器 vLLM）
+- `LLM_MODEL`（与 vLLM 暴露的模型 ID 完全一致）
+
+3. Nginx 与 HTTPS
+
+- 部署 `src/infra/compose/nginx/nginx.conf`
+- 配置证书文件 `/etc/nginx/ssl/{cert.pem,key.pem}`
+- 确保 SSE 路由 `/api/chat` 关闭缓冲
+
+4. 前端发布方式
+
+- 在 A 服务器构建：`npm run build`
+- 将 `dist/` 挂载到 Nginx 的静态目录
+
+5. 安全与运维
+
+- 生产环境禁用 Swagger（ENV=production）
+- 不使用 dev 默认密码
+- 仅开放必要端口（80/443/8000/8001）
