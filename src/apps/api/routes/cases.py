@@ -38,7 +38,11 @@ async def list_cases(
         病例列表
     """
     # 构建查询
-    query = select(Case).where(Case.is_active == True)  # noqa: E712
+    # 默认仅展示库内固定病例；随机生成病例通过“随机入口”创建，并通过会话复用/回溯。
+    query = select(Case).where(
+        Case.is_active == True,  # noqa: E712
+        Case.source == "fixed",
+    )
 
     if difficulty:
         query = query.where(Case.difficulty == difficulty)

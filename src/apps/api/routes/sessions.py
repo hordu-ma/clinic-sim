@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -21,6 +22,7 @@ from src.apps.api.schemas.sessions import (
     SessionListResponse,
     SessionResponse,
 )
+from src.apps.api.services.case_generation import generate_random_case_payload
 from src.apps.api.schemas.tests import (
     TestRequestCreate,
     TestRequestListItem,
@@ -51,22 +53,104 @@ async def create_session(
     Raises:
         HTTPException: 404 如果病例不存在或已禁用
     """
-    # 检查病例是否存在且启用
-    result = await db.execute(
-        select(Case).where(Case.id == data.case_id, Case.is_active == True)  # noqa: E712
-    )
-    case = result.scalar_one_or_none()
+    # 模式分流：fixed / random
+    if data.mode == "random":
+        payload, meta = await generate_random_case_payload()
 
-    if case is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Case not found or is inactive",
+        # normalize to avoid UnboundLocal in case of early validation failures
+        recommended_tests = payload.get("recommended_tests")
+
+        # 基础校验（尽量轻量，失败则返回 502）
+        required_fields = [
+            "title",
+            "difficulty",
+            "department",
+            "patient_info",
+            "chief_complaint",
+            "present_illness",
+            "past_history",
+            "physical_exam",
+            "available_tests",
+            "standard_diagnosis",
+            "key_points",
+        ]
+        missing = [f for f in required_fields if f not in payload]
+        if missing:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"LLM generated case missing fields: {', '.join(missing)}",
+            )
+
+        # recommended_tests 若存在，应与 available_tests.type 保持一致，否则检查申请会失败
+        available_test_types = {
+            str(t.get("type"))
+            for t in (payload.get("available_tests") or [])
+            if isinstance(t, dict) and t.get("type")
+        }
+        if recommended_tests is not None:
+            if not isinstance(recommended_tests, list) or not all(
+                isinstance(x, str) and x for x in recommended_tests
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="LLM generated case has invalid recommended_tests type",
+                )
+            unknown = [t for t in recommended_tests if t not in available_test_types]
+            if unknown:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=(
+                        "LLM generated case has recommended_tests not in available_tests.type: "
+                        + ", ".join(unknown)
+                    ),
+                )
+
+        case = Case(
+            title=str(payload["title"]),
+            difficulty=str(payload["difficulty"]),
+            department=str(payload["department"]),
+            patient_info=payload["patient_info"],
+            chief_complaint=str(payload["chief_complaint"]),
+            present_illness=str(payload["present_illness"]),
+            past_history=payload["past_history"],
+            physical_exam=payload["physical_exam"],
+            available_tests=payload["available_tests"],
+            standard_diagnosis=payload["standard_diagnosis"],
+            key_points=payload["key_points"],
+            recommended_tests=recommended_tests,
+            is_active=True,
+            source="random",
+            generation_meta=meta,
         )
+        db.add(case)
+        await db.commit()
+        await db.refresh(case)
+
+        case_id = case.id
+    else:
+        if data.case_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="case_id is required when mode=fixed",
+            )
+
+        # 检查病例是否存在且启用
+        result = await db.execute(
+            select(Case).where(Case.id == data.case_id, Case.is_active == True)  # noqa: E712
+        )
+        case = result.scalar_one_or_none()
+
+        if case is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Case not found or is inactive",
+            )
+        case_id = data.case_id
 
     # 创建会话
     session = Session(
         user_id=current_user.id,
-        case_id=data.case_id,
+        case_id=case_id,
         status="in_progress",
     )
     db.add(session)
@@ -125,11 +209,12 @@ async def list_sessions(
     session_ids = [s.id for s in sessions]
     if session_ids:
         msg_count_result = await db.execute(
-            select(Message.session_id, func.count(Message.id).label("count"))
+            select(Message.session_id, func.count(Message.id).label("message_count"))
             .where(Message.session_id.in_(session_ids))
             .group_by(Message.session_id)
         )
-        msg_counts = {row.session_id: row.count for row in msg_count_result}
+        # row attribute access may collide with dict methods; use indexing for robustness
+        msg_counts = {int(row[0]): int(row[1]) for row in msg_count_result}
     else:
         msg_counts = {}
 
@@ -215,7 +300,7 @@ async def get_session(
         messages=[
             MessageItem(
                 id=msg.id,
-                role=msg.role,
+                role=_normalize_message_role(msg.role),
                 content=msg.content,
                 tokens=msg.tokens,
                 latency_ms=msg.latency_ms,
@@ -223,6 +308,17 @@ async def get_session(
             )
             for msg in sorted_messages
         ],
+    )
+
+
+def _normalize_message_role(role: str) -> Literal["user", "assistant"]:
+    if role == "user":
+        return "user"
+    if role == "assistant":
+        return "assistant"
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=f"Invalid message role in DB: {role}",
     )
 
 

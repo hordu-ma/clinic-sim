@@ -45,6 +45,22 @@ const onSelectCase = async (item: CaseListItem) => {
     // error handled in interceptor
   }
 };
+
+const onSelectRandom = async () => {
+  const toast = showLoadingToast({
+    message: "创建随机病例会话中...",
+    forbidClick: true,
+  });
+
+  try {
+    const res = await createSession({ mode: "random" });
+    toast.close();
+    router.push(`/chat/${res.id}`);
+  } catch (e) {
+    toast.close();
+    // error handled in interceptor
+  }
+};
 </script>
 
 <template>
@@ -61,6 +77,14 @@ const onSelectCase = async (item: CaseListItem) => {
       finished-text="没有更多了"
       @load="onLoad"
     >
+      <div class="case-card case-card-random" @click="onSelectRandom">
+        <div class="case-title">随机练习病例</div>
+        <div class="case-tags">
+          <van-tag type="success">随机</van-tag>
+          <van-tag plain type="primary" style="margin-left: 5px">练习</van-tag>
+        </div>
+      </div>
+
       <div
         v-for="item in cases"
         :key="item.id"
@@ -90,6 +114,10 @@ const onSelectCase = async (item: CaseListItem) => {
   margin: 12px;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+.case-card-random {
+  border: 1px solid rgba(25, 137, 250, 0.35);
+  background: linear-gradient(180deg, rgba(25, 137, 250, 0.08), #fff);
 }
 .case-title {
   font-size: 16px;

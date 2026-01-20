@@ -15,25 +15,32 @@ class Settings(BaseSettings):
     """应用全局配置。"""
 
     # 数据库配置
-    DATABASE_URL: str
+    DATABASE_URL: str = ""
 
     # MinIO 配置
-    MINIO_ENDPOINT: str
-    MINIO_ACCESS_KEY: str
-    MINIO_SECRET_KEY: str
+    MINIO_ENDPOINT: str = ""
+    MINIO_ACCESS_KEY: str = ""
+    MINIO_SECRET_KEY: str = ""
     MINIO_BUCKET: str = "clinic-sim-dev"
     MINIO_SECURE: bool = False  # 开发环境使用 HTTP
 
     # LLM 配置
-    LLM_BASE_URL: str
-    LLM_MODEL: str
+    LLM_BASE_URL: str = ""
+    LLM_MODEL: str = ""
     LLM_TIMEOUT: int = 60  # 请求超时时间（秒）
     LLM_MAX_TOKENS: int = 500  # 最大生成 token 数
     LLM_TEMPERATURE: float = 0.7
-    LLM_MAX_CONTEXT_LEN: int = 1024  # 模型最大上下文长度
+    # 模型最大上下文长度（需要与 vLLM 启动参数 --max-model-len 一致）
+    LLM_MAX_CONTEXT_LEN: int = 1024
+
+    # LLM 病例随机生成配置（独立于对话生成，避免被 LLM_MAX_TOKENS 过小限制）
+    # 注意：最终请求会被按 LLM_MAX_CONTEXT_LEN 自动截断，避免 vLLM 因超出上下文而 400。
+    LLM_CASE_GEN_MAX_TOKENS: int = 1200
+    LLM_CASE_GEN_TEMPERATURE: float = 0.8
+    LLM_CASE_GEN_RETRIES: int = 2
 
     # JWT 配置
-    JWT_SECRET: str
+    JWT_SECRET: str = ""
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 天
 
@@ -50,7 +57,6 @@ class Settings(BaseSettings):
         case_sensitive=True,
         extra="ignore",
     )
-
 
 # 全局配置实例
 settings = Settings()

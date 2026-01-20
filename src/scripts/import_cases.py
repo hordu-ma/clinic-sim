@@ -48,6 +48,8 @@ async def import_case_from_json(db: AsyncSession, json_file: Path) -> None:
         existing_case.key_points = data["key_points"]
         existing_case.recommended_tests = data.get("recommended_tests")
         existing_case.is_active = True
+        existing_case.source = "fixed"
+        existing_case.generation_meta = None
 
         print(f"✓ 更新病例: {data['title']} ({data['difficulty']})")
     else:
@@ -66,6 +68,8 @@ async def import_case_from_json(db: AsyncSession, json_file: Path) -> None:
             key_points=data["key_points"],
             recommended_tests=data.get("recommended_tests"),
             is_active=True,
+            source="fixed",
+            generation_meta=None,
         )
         db.add(case)
         print(f"✓ 创建病例: {data['title']} ({data['difficulty']})")

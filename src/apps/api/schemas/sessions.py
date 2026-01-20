@@ -12,7 +12,13 @@ from pydantic import BaseModel, Field
 class SessionCreate(BaseModel):
     """创建会话请求。"""
 
-    case_id: int = Field(..., description="病例ID")
+    mode: Literal["fixed", "random"] = Field("fixed", description="创建模式")
+    case_id: int | None = Field(None, description="病例ID（fixed 模式必填）")
+
+    def model_post_init(self, __context: object) -> None:  # noqa: ANN001
+        # 在 schema 层做最小约束，避免 routes 层分支过多
+        if self.mode == "fixed" and self.case_id is None:
+            raise ValueError("case_id is required when mode=fixed")
 
 
 class SessionResponse(BaseModel):

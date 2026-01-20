@@ -20,7 +20,7 @@ export function getSessions(params?: {
 }
 
 // 创建会话
-export function createSession(data: { case_id: number }) {
+export function createSession(data: { mode?: "fixed" | "random"; case_id?: number }) {
   return request.post<any, SessionResponse>("/sessions/", data);
 }
 

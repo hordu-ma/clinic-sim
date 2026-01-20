@@ -60,6 +60,11 @@ export interface SessionResponse {
   started_at: string;
 }
 
+export interface SessionCreateRequest {
+  mode?: "fixed" | "random";
+  case_id?: number;
+}
+
 export interface SessionListItem {
   id: number;
   case_id: number;

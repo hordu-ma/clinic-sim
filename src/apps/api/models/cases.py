@@ -41,6 +41,18 @@ class Case(Base, TimestampMixin):
         JSON, nullable=True, comment="推荐检查项列表"
     )
 
+    # 病例来源
+    source: Mapped[str] = mapped_column(
+        String(20),
+        default="fixed",
+        comment="病例来源：fixed（库内病例）/random（LLM 随机生成）",
+    )
+    generation_meta: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True,
+        comment="随机生成元信息（模型版本、提示词版本、生成时间等）",
+    )
+
     # 是否启用
     is_active: Mapped[bool] = mapped_column(default=True, comment="是否启用")
 
