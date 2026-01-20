@@ -4,6 +4,7 @@ import CaseList from "../views/CaseList.vue";
 import Chat from "../views/Chat.vue";
 import SessionList from "../views/SessionList.vue";
 import { useUserStore } from "../stores/user";
+import { getUserInfo } from "../api/auth";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -38,13 +39,31 @@ const router = createRouter({
   ],
 });
 
-router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to, _from, next) => {
   const userStore = useUserStore();
-  if (to.meta.requiresAuth && !userStore.token) {
-    next("/login");
-  } else {
+
+  if (!to.meta.requiresAuth) {
     next();
+    return;
   }
+
+  if (!userStore.token) {
+    next("/login");
+    return;
+  }
+
+  if (!userStore.userInfo) {
+    try {
+      const info = await getUserInfo();
+      userStore.setUserInfo(info as any);
+    } catch (_error) {
+      userStore.clearToken();
+      next("/login");
+      return;
+    }
+  }
+
+  next();
 });
 
 export default router;
