@@ -148,3 +148,28 @@ npm run dev
 - 生产环境禁用 Swagger（ENV=production）
 - 不使用 dev 默认密码
 - 仅开放必要端口（80/443/8000/8001）
+
+---
+
+## 优雅关闭开发环境
+
+测试完成后，按以下顺序关闭服务（先停止请求入口，再停止后端服务）：
+
+```bash
+# 1. 关闭前端（在前端终端按 Ctrl+C，或执行）
+pkill -f "vite"
+
+# 2. 关闭 Docker 容器（API + PostgreSQL + MinIO）
+docker compose -f src/infra/compose/dev.yml down
+
+# 3. 关闭 vLLM（在 vLLM 终端按 Ctrl+C，或执行）
+pkill -f "vllm.entrypoints.openai.api_server"
+```
+
+**一键关闭**：
+
+```bash
+pkill -f "vite" 2>/dev/null
+docker compose -f src/infra/compose/dev.yml down
+pkill -f "vllm.entrypoints.openai.api_server" 2>/dev/null
+```
