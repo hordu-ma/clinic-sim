@@ -1,6 +1,7 @@
 import sys
 from logging.config import fileConfig
 from pathlib import Path
+from typing import Any
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
@@ -9,13 +10,22 @@ from sqlalchemy import engine_from_config, pool
 project_root = Path(__file__).resolve().parents[4]  # 回到 clinic-sim 根目录
 sys.path.insert(0, str(project_root))
 
+
 # 导入配置和模型（将使用项目根目录的 .env 文件）
-from src.apps.api.config import settings
-from src.apps.api.models import Base
+def _load_settings_and_metadata() -> tuple[Any, Any]:
+    from src.apps.api.config import settings
+    from src.apps.api.models import Base
+
+    return settings, Base.metadata
+
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
+
+# add your model's MetaData object here
+# for 'autogenerate' support
+settings, target_metadata = _load_settings_and_metadata()
 
 # 从应用配置中设置数据库 URL
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
@@ -24,10 +34,6 @@ config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 # This line sets up loggers basically.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
-
-# add your model's MetaData object here
-# for 'autogenerate' support
-target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
