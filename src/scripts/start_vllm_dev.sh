@@ -8,7 +8,7 @@ set -euo pipefail
 MODEL_PATH="${MODEL_PATH:-/home/malig/.cache/modelscope/hub/models/Qwen/Qwen2.5-1.5B-Instruct}"
 HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-8001}"
-MAX_MODEL_LEN="${MAX_MODEL_LEN:-1024}"          # shrink further if OOM
+MAX_MODEL_LEN="${MAX_MODEL_LEN:-2048}"          # shrink to 1024 if OOM
 GPU_MEMORY_UTILIZATION="${GPU_MEMORY_UTILIZATION:-0.7}"  # lower for 6GB GPUs
 MAX_NUM_SEQS="${MAX_NUM_SEQS:-2}"               # concurrent sequences cap
 TENSOR_PARALLEL_SIZE="${TENSOR_PARALLEL_SIZE:-1}"
