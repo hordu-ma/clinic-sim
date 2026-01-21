@@ -21,7 +21,6 @@ import httpx
 from src.apps.api.config import settings
 from src.apps.api.exceptions import BusinessError
 
-
 CASE_GENERATION_PROMPT_VERSION = "1.0"
 
 
@@ -55,7 +54,7 @@ def _extract_json(text: str) -> str:
         # strip trailing ```
         if s.rstrip().endswith("```"):
             s = s.rstrip()
-            s = s[: -3]
+            s = s[:-3]
         s = s.strip()
 
     # If there's extra text, try to take the outermost JSON object.
@@ -106,22 +105,26 @@ def _build_generation_messages() -> list[dict[str, str]]:
         "6) difficulty 仅可为 easy/medium/hard。\n"
         "7) 输出必须能被 JSON 解析（必须是严格 JSON，不允许省略逗号、不允许 trailing comma）。\n"
         "8) past_history 必须是对象（dict），包含 diseases/allergies/medications 三个数组字段。\n"
-        "9) available_tests[].type 必须是后端可识别的 test_type（例如：blood_routine、x_ray、ct、ultrasound、ecg、urine_routine）。\n"
+        "9) available_tests[].type 必须是后端可识别的 test_type（例如："
+        "blood_routine、x_ray、ct、ultrasound、ecg、urine_routine）。\n"
         "10) recommended_tests 必须从 available_tests[].type 中选择（同一套 test_type）。\n\n"
         "输出字段（必须全部包含）：\n"
         "- title, difficulty, department\n"
         "- patient_info{age,gender,occupation}\n"
         "- chief_complaint, present_illness\n"
         "- past_history{diseases[],allergies[],medications[]}\n"
-        "- physical_exam{visible{temperature,pulse,respiration,blood_pressure,general},on_request{}}\n"
-        "- available_tests[{type,name,result{}}]（type 使用：blood_routine/urine_routine/ecg/x_ray/ultrasound/ct 之一）\n"
+        "- physical_exam{visible{temperature,pulse,respiration,blood_pressure,"
+        "general},on_request{}}\n"
+        "- available_tests[{type,name,result{}}]（type 使用："
+        "blood_routine/urine_routine/ecg/x_ray/ultrasound/ct 之一）\n"
         "- standard_diagnosis{primary,differential[]}\n"
         "- key_points[]\n"
         "- recommended_tests[]\n"
     )
     user = (
         "请随机生成一个新的病例，偏向常见内科/急诊病种。\n"
-        "重要：recommended_tests 必须是 test_type 列表（如 blood_routine/ecg/x_ray/ct/ultrasound/urine_routine），"
+        "重要：recommended_tests 必须是 test_type 列表（如 "
+        "blood_routine/ecg/x_ray/ct/ultrasound/urine_routine），"
         "不能写检查中文名称。"
     )
     return [
@@ -148,7 +151,7 @@ async def generate_random_case_payload() -> tuple[dict[str, Any], dict[str, Any]
     max_tokens = max(16, min(settings.LLM_CASE_GEN_MAX_TOKENS, available_tokens))
 
     last_err: Exception | None = None
-    for attempt in range(settings.LLM_CASE_GEN_RETRIES + 1):
+    for _attempt in range(settings.LLM_CASE_GEN_RETRIES + 1):
         try:
             async with httpx.AsyncClient(timeout=settings.LLM_TIMEOUT) as client:
                 resp = await client.post(
@@ -179,12 +182,7 @@ async def generate_random_case_payload() -> tuple[dict[str, Any], dict[str, Any]
             continue
 
         data = resp.json()
-        content = (
-            (data.get("choices") or [{}])[0]
-            .get("message", {})
-            .get("content", "")
-            .strip()
-        )
+        content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "").strip()
         if not content:
             last_err = BusinessError("LLM 返回为空，无法生成病例", status_code=502)
             continue
@@ -258,7 +256,10 @@ async def generate_random_case_payload() -> tuple[dict[str, Any], dict[str, Any]
         if isinstance(last_err, httpx.RequestError):
             raise BusinessError(f"LLM 连接失败: {str(last_err)}", status_code=502) from last_err
         if isinstance(last_err, json.JSONDecodeError):
-            raise BusinessError("LLM 返回不是合法 JSON，无法生成病例", status_code=502) from last_err
+            raise BusinessError(
+                "LLM 返回不是合法 JSON，无法生成病例",
+                status_code=502,
+            ) from last_err
         raise BusinessError("LLM 生成病例失败", status_code=502) from last_err
 
     generation_meta = {

@@ -22,13 +22,13 @@ from src.apps.api.schemas.sessions import (
     SessionListResponse,
     SessionResponse,
 )
-from src.apps.api.services.case_generation import generate_random_case_payload
 from src.apps.api.schemas.tests import (
     TestRequestCreate,
     TestRequestListItem,
     TestRequestListResponse,
     TestRequestResponse,
 )
+from src.apps.api.services.case_generation import generate_random_case_payload
 from src.apps.api.services.scoring import ScoringService
 
 router = APIRouter()
