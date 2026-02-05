@@ -33,14 +33,20 @@ project-root/
 ├── src/
 │   ├── apps/
 │   │   ├── api/
-│   │   │   ├── app/
-│   │   │   │   ├── api/         # 路由层（只做参数与响应）
-│   │   │   │   ├── schemas/     # Pydantic models
-│   │   │   │   ├── services/    # 业务 + LLM 调用（核心）
-│   │   │   │   ├── core/        # config / logging / security
-│   │   │   │   ├── db/          # session / base / crud
-│   │   │   │   └── main.py
-│   │   │   └── tests/           # pytest tests（可选）
+│   │   │   ├── __init__.py
+│   │   │   ├── main.py          # FastAPI 应用入口
+│   │   │   ├── config.py        # 配置加载（pydantic-settings）
+│   │   │   ├── dependencies.py  # 依赖注入（DB session / JWT 鉴权）
+│   │   │   ├── exceptions.py    # 统一异常处理
+│   │   │   ├── middleware.py    # 中间件（Trace ID / 日志）
+│   │   │   ├── logging_config.py
+│   │   │   ├── rate_limit.py
+│   │   │   ├── routes/          # 路由层（只做参数与响应）
+│   │   │   ├── schemas/         # Pydantic models
+│   │   │   ├── services/        # 业务 + LLM 调用（核心）
+│   │   │   ├── models/          # SQLAlchemy ORM 模型
+│   │   │   ├── migrations/      # Alembic 迁移
+│   │   │   └── utils/           # 工具函数（JWT 等）
 │   │   └── web/
 │   │       └── src/
 │   │           ├── api/         # 所有接口封装
@@ -50,6 +56,7 @@ project-root/
 │   ├── cases/
 │   ├── docs/
 │   └── scripts/
+├── tests/                       # pytest 测试（项目根目录）
 └── SKILL.md
 ```
 
