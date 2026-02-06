@@ -1,0 +1,13 @@
+items:
+  - id: add-api-endpoint
+    title: "新增 API 接口"
+    entry: "SKILLS/playbooks/add-api-endpoint.md"
+  - id: change-db-model
+    title: "修改数据库模型与迁移"
+    entry: "SKILLS/playbooks/change-db-model.md"
+  - id: extend-scoring
+    title: "扩展评分逻辑"
+    entry: "SKILLS/playbooks/extend-scoring.md"
+  - id: random-case-mode
+    title: "随机病例模式"
+    entry: "SKILLS/playbooks/random-case-mode.md"

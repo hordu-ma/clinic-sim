@@ -1,0 +1,7 @@
+items:
+  - id: production-deploy
+    title: "生产部署流程"
+    entry: "SKILLS/playbooks/production-deploy.md"
+  - id: dev-startup
+    title: "本地开发启动"
+    entry: "SKILLS/scripts/dev-startup.md"

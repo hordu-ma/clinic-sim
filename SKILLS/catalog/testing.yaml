@@ -1,0 +1,4 @@
+items:
+  - id: test-gate
+    title: "测试与质量门禁"
+    entry: "SKILLS/checklists/change-review.md"

@@ -1,0 +1,13 @@
+{
+  "name": "clinic-sim-skills",
+  "version": "1.0.0",
+  "owner": "project-maintainer",
+  "updated_at": "2026-02-06",
+  "scope": ["backend", "frontend", "infra", "testing", "docs"],
+  "entrypoints": {
+    "catalog": "SKILLS/catalog/index.yaml",
+    "reference": "SKILLS/reference/docs-index.md",
+    "playbooks": "SKILLS/playbooks",
+    "scripts": "SKILLS/scripts"
+  }
+}
