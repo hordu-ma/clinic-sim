@@ -37,6 +37,11 @@
 - 诊断提交与规则评分
 - 评分详情可追溯（维度分、关键点覆盖、检查合理性）
 
+## SKILLS 指南
+
+- 项目能力与执行资产库：[SKILLS/README.md](SKILLS/README.md)
+- 主题目录索引：[SKILLS/catalog/index.yaml](SKILLS/catalog/index.yaml)
+
 ## 核心流程
 
 登录 → 病例列表 → 创建会话 → 流式问诊 → 申请检查 → 提交诊断 → 查看评分 → 历史会话
