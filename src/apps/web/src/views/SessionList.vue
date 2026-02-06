@@ -71,7 +71,74 @@ onMounted(() => {
 
 <style scoped>
 .session-list-page {
-  background: #f7f8fa;
+  background: #fef3c7;
   min-height: 100vh;
+}
+
+.list-container {
+  padding: 10px 0;
+}
+
+.session-list-page :deep(.van-cell-group) {
+  background: transparent;
+}
+
+.session-list-page :deep(.van-cell) {
+  background: #ffffff;
+  margin: 10px 16px;
+  border-radius: 11px;
+  padding: 16px;
+  border: 2px solid #fde68a;
+  animation: sessionPop 0.4s ease-out backwards;
+}
+
+@keyframes sessionPop {
+  0% {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.session-list-page :deep(.van-cell:nth-child(1)) { animation-delay: 0.06s; }
+.session-list-page :deep(.van-cell:nth-child(2)) { animation-delay: 0.12s; }
+.session-list-page :deep(.van-cell:nth-child(3)) { animation-delay: 0.18s; }
+.session-list-page :deep(.van-cell:nth-child(4)) { animation-delay: 0.24s; }
+
+.session-list-page :deep(.van-cell:active) {
+  background: #fffbeb;
+  border-color: #fbbf24;
+}
+
+.session-list-page :deep(.van-cell__title) {
+  color: #78350f;
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.session-list-page :deep(.van-cell__label) {
+  color: #92400e;
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.session-list-page :deep(.van-tag) {
+  border-radius: 9px;
+  padding: 4px 11px;
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.session-list-page :deep(.van-tag--primary) {
+  background: #0891b2;
+  border: none;
+}
+
+.session-list-page :deep(.van-tag--success) {
+  background: #059669;
+  border: none;
 }
 </style>

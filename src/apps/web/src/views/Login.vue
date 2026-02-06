@@ -91,21 +91,97 @@ const onSubmit = async () => {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  background-color: #f7f8fa;
+  background: #e0f2fe;
+  padding: 0 20px;
 }
 
 .header {
   text-align: center;
-  margin-bottom: 40px;
+  margin-bottom: 45px;
+  animation: headerFade 0.8s ease-out;
+}
+
+@keyframes headerFade {
+  0% {
+    opacity: 0;
+    transform: translateY(-25px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .header h2 {
-  margin-bottom: 10px;
-  color: #323233;
+  margin-bottom: 8px;
+  color: #0c4a6e;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: 1px;
 }
 
 .header p {
-  color: #969799;
-  font-size: 14px;
+  color: #0369a1;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.login-page :deep(.van-cell-group--inset) {
+  margin: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 2px solid #bae6fd;
+  animation: formSlide 0.8s ease-out 0.2s backwards;
+}
+
+@keyframes formSlide {
+  0% {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.login-page :deep(.van-cell) {
+  padding: 16px;
+  background: #ffffff;
+}
+
+.login-page :deep(.van-field__label) {
+  color: #0c4a6e;
+  font-weight: 600;
+  width: 70px;
+}
+
+.login-page :deep(.van-field__control) {
+  color: #0369a1;
+}
+
+.login-page :deep(.van-button) {
+  height: 48px;
+  font-size: 16px;
+  font-weight: 700;
+  background: #0369a1;
+  border: none;
+  animation: btnPop 0.8s ease-out 0.4s backwards;
+}
+
+@keyframes btnPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.login-page :deep(.van-button:active) {
+  background: #075985;
+  transform: scale(0.96);
 }
 </style>

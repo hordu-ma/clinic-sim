@@ -105,24 +105,110 @@ const onSelectRandom = async () => {
 
 <style scoped>
 .case-list-page {
-  background: #f7f8fa;
+  background: #ecfdf5;
   min-height: 100vh;
 }
+
 .case-card {
-  background: #fff;
-  padding: 16px;
-  margin: 12px;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  background: #fefefe;
+  padding: 19px;
+  margin: 13px 15px;
+  border-radius: 12px;
+  border: 2px solid #d1fae5;
+  transition: transform 0.25s, border-color 0.25s;
+  cursor: pointer;
+  animation: itemShow 0.5s ease-out backwards;
 }
+
+@keyframes itemShow {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.case-card:nth-child(1) { animation-delay: 0.08s; }
+.case-card:nth-child(2) { animation-delay: 0.16s; }
+.case-card:nth-child(3) { animation-delay: 0.24s; }
+.case-card:nth-child(4) { animation-delay: 0.32s; }
+
+.case-card:active {
+  transform: scale(0.97);
+  border-color: #6ee7b7;
+}
+
 .case-card-random {
-  border: 1px solid rgba(25, 137, 250, 0.35);
-  background: linear-gradient(180deg, rgba(25, 137, 250, 0.08), #fff);
+  background: #fef3c7;
+  border: 2px solid #fbbf24;
+  position: relative;
+  overflow: hidden;
 }
+
+.case-card-random::after {
+  content: "★";
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  font-size: 22px;
+  color: #f59e0b;
+  animation: rotateIcon 4s linear infinite;
+}
+
+@keyframes rotateIcon {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
 .case-title {
   font-size: 16px;
-  font-weight: bold;
-  margin-bottom: 8px;
-  color: #323233;
+  font-weight: 700;
+  margin-bottom: 11px;
+  color: #064e3b;
+  line-height: 1.45;
+}
+
+.case-card-random .case-title {
+  color: #92400e;
+}
+
+.case-tags {
+  display: flex;
+  gap: 7px;
+}
+
+.case-tags :deep(.van-tag) {
+  border-radius: 10px;
+  padding: 5px 12px;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.case-tags :deep(.van-tag--primary) {
+  background: #0891b2;
+  border: none;
+}
+
+.case-tags :deep(.van-tag--success) {
+  background: #059669;
+  border: none;
+}
+
+.case-tags :deep(.van-tag--danger) {
+  background: #dc2626;
+  border: none;
+}
+
+.case-tags :deep(.van-tag--plain) {
+  background: #dbeafe;
+  color: #075985;
+  border: 1px solid #93c5fd;
 }
 </style>
