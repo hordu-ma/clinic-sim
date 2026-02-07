@@ -429,74 +429,155 @@ const sendMessage = async () => {
   height: 100vh;
   display: flex;
   flex-direction: column;
+  background: #e8f4f8;
 }
+
 .loading-center {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
 }
+
 .message-list {
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
-  background: #f7f8fa;
+  padding: 18px 14px 26px;
 }
+
 .message-item {
   display: flex;
-  margin-bottom: 16px;
+  margin-bottom: 22px;
+  opacity: 0;
+  animation: msgAppear 0.45s ease-out forwards;
 }
+
+@keyframes msgAppear {
+  0% {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 .message-item.user {
   flex-direction: row-reverse;
+  animation: msgAppearRight 0.45s ease-out forwards;
 }
+
+@keyframes msgAppearRight {
+  0% {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 .avatar {
   width: 40px;
   height: 40px;
-  border-radius: 50%;
-  background: #eee;
+  border-radius: 8px;
+  background: #cbd5e1;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 600;
   flex-shrink: 0;
+  color: #475569;
 }
+
 .message-item.user .avatar {
-  background: #1989fa;
-  color: #fff;
-  margin-left: 8px;
+  background: #0369a1;
+  color: #e0f2fe;
+  margin-left: 11px;
+  border: 2px solid #7dd3fc;
 }
+
 .message-item.assistant .avatar {
-  background: #ff976a;
-  color: #fff;
-  margin-right: 8px;
+  background: #ea580c;
+  color: #ffedd5;
+  margin-right: 11px;
+  border: 2px solid #fed7aa;
 }
+
 .message-item.system {
   justify-content: center;
 }
+
 .message-item.system .avatar {
   display: none;
 }
+
 .message-item.system .content {
-  background: transparent;
-  color: #999;
-  font-size: 13px;
-  max-width: 90%;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 12px;
+  max-width: 82%;
   text-align: center;
+  padding: 9px 16px;
+  border-radius: 14px;
+  border: 1px dashed #cbd5e1;
 }
+
 .content {
   max-width: 70%;
-  background: #fff;
-  padding: 10px;
-  border-radius: 8px;
-  word-break: break-all;
+  background: #ffffff;
+  padding: 13px 17px;
+  border-radius: 6px 16px 16px 16px;
+  word-break: break-word;
   white-space: pre-wrap;
   text-align: left;
+  line-height: 1.6;
+  font-size: 14.5px;
+  border-left: 3px solid #fbbf24;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08);
 }
+
 .message-item.user .content {
-  background: #e8f3ff;
+  background: #0c4a6e;
+  color: #e0f2fe;
+  border-left: 3px solid #38bdf8;
+  border-radius: 16px 6px 16px 16px;
 }
+
 .input-area {
-  background: #fff;
-  border-top: 1px solid #eee;
+  background: #ffffff;
+  border-top: 2px solid #cbd5e1;
+  padding: 13px 15px;
+}
+
+.input-area :deep(.van-field) {
+  border-radius: 22px;
+  border: 2px solid #cbd5e1;
+  background: #f8fafc;
+  padding: 9px 18px;
+}
+
+.input-area :deep(.van-field:focus-within) {
+  border-color: #0284c7;
+  background: #ffffff;
+}
+
+.input-area :deep(.van-field__control) {
+  font-size: 14.5px;
+}
+
+.input-area :deep(.van-button--primary) {
+  border-radius: 18px;
+  padding: 9px 22px;
+  background: #0369a1;
+  border: none;
+  font-weight: 600;
+}
+
+.input-area :deep(.van-button--primary:active) {
+  background: #075985;
 }
 </style>
