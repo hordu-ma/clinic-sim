@@ -44,7 +44,7 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
       LLM_BASE_URL: ${LLM_BASE_URL:-http://host.docker.internal:8001}
-      LLM_MODEL: ${LLM_MODEL:-/home/malig/.cache/modelscope/hub/models/Qwen/Qwen2.5-1.5B-Instruct}
+      LLM_MODEL: ${LLM_MODEL:-/home/malig/.cache/modelscope/hub/models/Qwen/Qwen2___5-1___5B-Instruct}
       LLM_MAX_CONTEXT_LEN: ${LLM_MAX_CONTEXT_LEN:-1800}
       LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-200}
       ENV: ${ENV:-dev}
