@@ -50,15 +50,17 @@ const onSelectRandom = async () => {
   const toast = showLoadingToast({
     message: "创建随机病例会话中...",
     forbidClick: true,
+    duration: 0,
   });
 
   try {
     const res = await createSession({ mode: "random" });
     toast.close();
     router.push(`/chat/${res.id}`);
-  } catch (e) {
+  } catch (e: any) {
     toast.close();
-    // error handled in interceptor
+    const msg = e?.response?.data?.detail || "创建随机病例失败，请重试";
+    showFailToast(msg);
   }
 };
 </script>

@@ -34,6 +34,17 @@ class Case(Base, TimestampMixin):
     )
     available_tests: Mapped[list] = mapped_column(JSON, comment="可申请的检查项及结果")
 
+    # 补充病史
+    marriage_childbearing_history: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="婚育个人史"
+    )
+    family_history: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="家族史"
+    )
+    case_number: Mapped[int | None] = mapped_column(
+        nullable=True, comment="随机病例序号（1-106）"
+    )
+
     # 标准答案（仅教师端可见）
     standard_diagnosis: Mapped[dict] = mapped_column(JSON, comment="标准诊断（主要诊断、鉴别诊断）")
     key_points: Mapped[list] = mapped_column(JSON, comment="关键问诊点列表")

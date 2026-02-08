@@ -19,9 +19,10 @@ export function getSessions(params?: {
   return request.get<any, SessionListResponse>("/sessions/", { params });
 }
 
-// 创建会话
+// 创建会话（随机模式需要 LLM 生成病例，耗时较长，使用更大超时）
 export function createSession(data: { mode?: "fixed" | "random"; case_id?: number }) {
-  return request.post<any, SessionResponse>("/sessions/", data);
+  const timeout = data.mode === "random" ? 120000 : 10000;
+  return request.post<any, SessionResponse>("/sessions/", data, { timeout });
 }
 
 // 获取会话详情

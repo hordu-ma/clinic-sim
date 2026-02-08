@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from src.apps.api.dependencies import CurrentUser, DbSession
+from src.apps.api.logging_config import logger
 from src.apps.api.models import Case, Message, Score, Session, TestRequest
 from src.apps.api.schemas.scores import (
     DiagnosisSubmit,
@@ -76,9 +77,14 @@ async def create_session(
         ]
         missing = [f for f in required_fields if f not in payload]
         if missing:
+            logger.warning(
+                "LLM 生成病例缺少字段",
+                missing=missing,
+                meta=meta,
+            )
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"LLM generated case missing fields: {', '.join(missing)}",
+                detail=f"LLM 生成病例缺少字段: {', '.join(missing)}",
             )
 
         # recommended_tests 若存在，应与 available_tests.type 保持一致，否则检查申请会失败
@@ -88,22 +94,20 @@ async def create_session(
             if isinstance(t, dict) and t.get("type")
         }
         if recommended_tests is not None:
-            if not isinstance(recommended_tests, list) or not all(
-                isinstance(x, str) and x for x in recommended_tests
-            ):
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail="LLM generated case has invalid recommended_tests type",
-                )
+            if not isinstance(recommended_tests, list):
+                recommended_tests = []
+            else:
+                # 过滤非字符串项
+                recommended_tests = [x for x in recommended_tests if isinstance(x, str) and x]
+            # 自动过滤不在 available_tests 中的项（小模型常产生不一致）
             unknown = [t for t in recommended_tests if t not in available_test_types]
             if unknown:
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail=(
-                        "LLM generated case has recommended_tests not in available_tests.type: "
-                        + ", ".join(unknown)
-                    ),
+                logger.info(
+                    "自动过滤不一致的 recommended_tests",
+                    unknown=unknown,
+                    available=available_test_types,
                 )
+                recommended_tests = [t for t in recommended_tests if t in available_test_types]
 
         case = Case(
             title=str(payload["title"]),
@@ -118,6 +122,11 @@ async def create_session(
             standard_diagnosis=payload["standard_diagnosis"],
             key_points=payload["key_points"],
             recommended_tests=recommended_tests,
+            marriage_childbearing_history=str(
+                payload.get("marriage_childbearing_history", "未提供")
+            ),
+            family_history=str(payload.get("family_history", "未提供")),
+            case_number=payload.get("case_number"),
             is_active=True,
             source="random",
             generation_meta=meta,
