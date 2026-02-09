@@ -1,0 +1,3 @@
+interface:
+  display_name: "Security Check"
+  short_description: "Run security hygiene checks on code changes"

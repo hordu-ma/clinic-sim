@@ -1,0 +1,3 @@
+interface:
+  display_name: "Extend Scoring"
+  short_description: "Evolve scoring logic with traceable rules"

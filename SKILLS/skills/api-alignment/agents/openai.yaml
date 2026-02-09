@@ -1,0 +1,3 @@
+interface:
+  display_name: "API Alignment"
+  short_description: "Keep frontend and backend contracts aligned"

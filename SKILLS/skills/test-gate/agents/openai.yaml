@@ -1,0 +1,3 @@
+interface:
+  display_name: "Test Gate"
+  short_description: "Apply release-quality testing and review gate"

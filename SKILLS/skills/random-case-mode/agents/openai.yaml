@@ -1,0 +1,3 @@
+interface:
+  display_name: "Random Case Mode"
+  short_description: "Maintain robust random case generation flow"
