@@ -25,7 +25,9 @@
 - `src/apps/api/exceptions.py`
   - 定义 `BusinessError` 与全局异常处理器
 - `src/apps/api/middleware.py`
-  - Trace ID 与请求日志中间件
+  - Trace ID 中间件（为每个请求生成唯一标识，用于日志追踪与错误排查）
+  - 请求日志中间件（记录请求方法、路径、状态码与耗时）
+  - 认证上下文中间件（从 JWT 提取 user_id 到 request.state，供限流 key 使用，不做鉴权判定）
 - `src/apps/api/logging_config.py`
   - Loguru 结构化日志配置
 - `src/apps/api/dependencies.py`
@@ -130,19 +132,27 @@ flowchart TD
 
 ## 部署架构图
 
-描述运行时组件及其网络连接关系。
+描述运行时组件及其网络连接关系（A/B 双机部署）。
 
 ```mermaid
 flowchart LR
   用户[用户/浏览器]
-  前端[前端 Vite 构建产物]
-  API[后端 FastAPI 服务]
-  数据库[(PostgreSQL)]
-  对象存储[(MinIO)]
-  LLM[LLM 推理服务]
 
-  用户 --> 前端
-  前端 --> API
+  subgraph A服务器["A 服务器（入口层）"]
+    Nginx[Nginx 反向代理]
+    前端[前端静态文件]
+  end
+
+  subgraph B服务器["B 服务器（核心层·GPU）"]
+    API[后端 FastAPI 服务]
+    数据库[(PostgreSQL)]
+    对象存储[(MinIO)]
+    LLM[vLLM 推理服务]
+  end
+
+  用户 -->|HTTPS| Nginx
+  Nginx --> 前端
+  Nginx -->|反代 /api/| API
   API --> 数据库
   API --> 对象存储
   API --> LLM
