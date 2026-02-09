@@ -9,9 +9,12 @@ import time
 import uuid
 from collections.abc import Awaitable, Callable
 
+import jwt
 from fastapi import Request, Response
+from jwt import InvalidTokenError
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from .config import settings
 from .logging_config import logger, trace_id_var
 
 
@@ -88,4 +91,36 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         return response
 
 
-__all__ = ["TraceIdMiddleware", "RequestLoggingMiddleware"]
+class AuthContextMiddleware(BaseHTTPMiddleware):
+    """认证上下文中间件。
+
+    仅解析 JWT 中的 sub 到 request.state.user_id，
+    用于限流 key，不做鉴权结果判定。
+    """
+
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        request.state.user_id = None
+        auth_header = request.headers.get("Authorization", "")
+
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:].strip()
+            if token:
+                try:
+                    payload = jwt.decode(
+                        token,
+                        settings.JWT_SECRET,
+                        algorithms=[settings.JWT_ALGORITHM],
+                    )
+                    user_id = payload.get("sub")
+                    if user_id is not None:
+                        request.state.user_id = str(user_id)
+                except InvalidTokenError:
+                    # 鉴权失败由依赖层处理，这里只保证限流回退到 IP。
+                    pass
+
+        return await call_next(request)
+
+
+__all__ = ["TraceIdMiddleware", "RequestLoggingMiddleware", "AuthContextMiddleware"]

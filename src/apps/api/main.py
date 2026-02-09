@@ -5,14 +5,13 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from .config import settings
 from .exceptions import setup_exception_handlers
 from .logging_config import logger, setup_logging
-from .middleware import RequestLoggingMiddleware, TraceIdMiddleware
-from .rate_limit import limiter
+from .middleware import AuthContextMiddleware, RequestLoggingMiddleware, TraceIdMiddleware
+from .rate_limit import limiter, rate_limit_exceeded_handler
 
 # 初始化日志系统
 setup_logging()
@@ -28,7 +27,7 @@ app = FastAPI(
 
 # 配置限流器
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 # 注册全局异常处理器
 setup_exception_handlers(app)
@@ -36,7 +35,9 @@ setup_exception_handlers(app)
 # 添加中间件（注意顺序：后添加的先执行）
 # 1. 请求日志中间件
 app.add_middleware(RequestLoggingMiddleware)
-# 2. Trace ID 中间件（最先执行，确保 trace_id 可用）
+# 2. 认证上下文中间件（为限流提供 user_id）
+app.add_middleware(AuthContextMiddleware)
+# 3. Trace ID 中间件（最先执行，确保 trace_id 可用）
 app.add_middleware(TraceIdMiddleware)
 
 # CORS 配置
