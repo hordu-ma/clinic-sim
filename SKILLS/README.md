@@ -1,22 +1,27 @@
 # SKILLS
 
-本目录已重构为可触发的 Codex skills。
+可触发的 Codex skills 集合。
 
-## 目录约定
+## 目录结构
 
-- 可触发 skills：`SKILLS/skills/<skill-name>/SKILL.md`
-- 每个 skill 可包含：
-- `references/` 领域参考
-- `agents/openai.yaml` UI 元数据
+```
+SKILLS/
+  catalog/          # 主题索引（backend/frontend/infra/testing）
+  skills/<name>/    # 独立 skill
+    SKILL.md        # 工作流 + guardrails + references 引用
+    references/     # 领域参考文档
+    agents/         # UI 元数据
+  metadata/         # 版本与归属信息
+```
 
-## 使用方式
+## 使用
 
-1. 先在 `SKILLS/catalog/*.yaml` 选择主题与 skill。
-2. 通过 skill 名称触发，例如：`$add-api-endpoint`。
-3. 按 skill 内工作流执行，按需读取其 `references/`。
+1. 在 `catalog/*.yaml` 选择 skill。
+2. 触发 skill：`$add-api-endpoint`。
+3. 按 SKILL.md 工作流执行，按需读取 `references/`。
 
-## 维护规则
+## 维护
 
-- 每次新增能力优先新增独立 skill，而不是堆叠在通用文档。
-- 变更时优先更新对应 skill 的 `SKILL.md` 与 `references/`。
-- 保持 frontmatter 的 `name` 与目录名一致。
+- 新增能力 → 新增独立 skill，不堆叠在通用文档。
+- 变更 → 更新对应 SKILL.md 与 references/。
+- frontmatter `name` 与目录名保持一致。
