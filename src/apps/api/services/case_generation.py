@@ -1,13 +1,12 @@
-"""Random case generation service.
+"""随机病例生成服务。
 
-Generates a full Case payload (including standard answers) via the configured LLM,
-so that the random case is:
-- consistent for the entire session (stored in DB)
-- scorable using the existing rule-based scoring engine
+通过已配置的 LLM 生成完整的 Case 载荷（包含标准答案），
+使随机病例具备以下特性：
+- 在整个会话内保持一致（持久化到数据库）
+- 可被现有规则评分引擎进行评分
 
-Notes:
-- This module intentionally keeps the generation contract aligned with the
-  existing Case model fields.
+说明：
+- 本模块有意保持生成契约与现有 Case 模型字段对齐。
 """
 
 from __future__ import annotations
@@ -146,29 +145,29 @@ _CASE_TEST_TYPES = [
 
 
 def _extract_json(text: str) -> str:
-    """Extract JSON object from LLM output.
+    """从 LLM 输出中提取 JSON 对象。
 
-    The generation prompt requests *only JSON*, but some models may wrap it in
-    code fences. We tolerate that to improve robustness.
+    生成提示词要求仅输出 JSON，但部分模型可能会用代码块包裹。
+    这里兼容这种情况以提升鲁棒性。
     """
 
     s = (text or "").strip()
     if not s:
         return s
 
-    # Handle ```json ... ``` or ``` ... ``` wrappers
+    # 处理 ```json ... ``` 或 ``` ... ``` 包裹
     if s.startswith("```"):
-        # strip leading ```lang
+        # 去掉开头的 ```lang
         first_newline = s.find("\n")
         if first_newline != -1:
             s = s[first_newline + 1 :]
-        # strip trailing ```
+        # 去掉结尾的 ```
         if s.rstrip().endswith("```"):
             s = s.rstrip()
             s = s[:-3]
         s = s.strip()
 
-    # If there's extra text, try to take the outermost JSON object.
+    # 如果存在额外文本，尝试截取最外层 JSON 对象。
     start = s.find("{")
     end = s.rfind("}")
     if start != -1 and end != -1 and end > start:
@@ -177,13 +176,12 @@ def _extract_json(text: str) -> str:
 
 
 def _estimate_prompt_tokens(messages: list[dict[str, str]]) -> int:
-    """Rough token estimator for OpenAI-style messages.
+    """粗略估算 OpenAI 风格消息的 token 数。
 
-    We only need a conservative upper bound to avoid vLLM rejecting requests with
-    max_tokens that exceed the remaining context window.
+    这里仅需保守上界，用于避免 vLLM 因 `max_tokens` 超出剩余上下文窗口而拒绝请求。
     """
 
-    # Use tiktoken if available for a closer estimate (best effort).
+    # 若可用则使用 tiktoken 做更接近真实值的估算（尽力而为）。
     try:
         import tiktoken  # type: ignore
 
@@ -194,7 +192,7 @@ def _estimate_prompt_tokens(messages: list[dict[str, str]]) -> int:
             total += 4
         return total
     except Exception:
-        # Fallback heuristic.
+        # 回退到启发式估算。
         total = 0
         for m in messages:
             content = str(m.get("content", ""))
@@ -251,10 +249,9 @@ def _build_generation_messages(disease_name: str, case_number: int) -> list[dict
 
 
 async def generate_random_case_payload() -> tuple[dict[str, Any], dict[str, Any]]:
-    """Generate a random case payload via LLM.
+    """通过 LLM 生成随机病例载荷。
 
-    Randomly selects a disease from the 106-disease list, then asks the LLM
-    to generate a complete case for that disease.
+    从 106 种疾病列表中随机选择一种疾病，再让 LLM 为该疾病生成完整病例。
 
     Returns:
         (case_payload, generation_meta)
@@ -267,9 +264,9 @@ async def generate_random_case_payload() -> tuple[dict[str, Any], dict[str, Any]
     prompt_tokens = _estimate_prompt_tokens(messages)
     available_tokens = max(0, settings.LLM_MAX_CONTEXT_LEN - prompt_tokens)
 
-    # Cap max_tokens to avoid vLLM 400: max_tokens must fit remaining context.
-    # If we don't have enough room, still try a minimal generation so we can
-    # return a more actionable error (e.g. JSON decode) instead of hard-failing.
+    # 限制 max_tokens，避免触发 vLLM 400：max_tokens 必须适配剩余上下文。
+    # 若剩余空间不足，仍尝试最小生成，以便返回更可操作的错误（如 JSON 解析错误），
+    # 而不是直接硬失败。
     max_tokens = max(16, min(settings.LLM_CASE_GEN_MAX_TOKENS, available_tokens))
 
     last_err: Exception | None = None
@@ -284,8 +281,8 @@ async def generate_random_case_payload() -> tuple[dict[str, Any], dict[str, Any]
                         "stream": False,
                         "temperature": settings.LLM_CASE_GEN_TEMPERATURE,
                         "max_tokens": max_tokens,
-                        # vLLM supports OpenAI-compatible response_format; this
-                        # helps enforce strict JSON output.
+                        # vLLM 支持 OpenAI 兼容的 response_format；
+                        # 这有助于强制输出严格 JSON。
                         "response_format": {"type": "json_object"},
                     },
                 )
@@ -309,24 +306,24 @@ async def generate_random_case_payload() -> tuple[dict[str, Any], dict[str, Any]
             last_err = BusinessError("LLM 返回为空，无法生成病例", status_code=502)
             continue
 
-        # First parse attempt
+        # 首次解析尝试
         try:
             payload = json.loads(_extract_json(content))
         except json.JSONDecodeError as e:
             last_err = e
             continue
 
-        # Minimal post-parse normalization to increase downstream success rate.
-        # Ensure past_history is an object.
+        # 进行最小化的解析后归一化，提升下游成功率。
+        # 确保 past_history 为对象。
         if not isinstance(payload.get("past_history"), dict):
             payload["past_history"] = {"diseases": [], "allergies": [], "medications": []}
 
-        # Ensure available_tests / recommended_tests use allowed test_type strings.
+        # 确保 available_tests / recommended_tests 使用允许的 test_type 字符串。
         if isinstance(payload.get("available_tests"), list):
             for t in payload["available_tests"]:
                 if isinstance(t, dict) and "type" in t and isinstance(t["type"], str):
                     if t["type"] not in _CASE_TEST_TYPES:
-                        # try a small mapping for common Chinese labels
+                        # 对常见中文标签做一小步映射
                         mapping = {
                             "血常规": "blood_routine",
                             "尿常规": "urine_routine",
@@ -340,8 +337,8 @@ async def generate_random_case_payload() -> tuple[dict[str, Any], dict[str, Any]
                         }
                         t["type"] = mapping.get(t["type"], t["type"])
 
-                # Ensure result is an object (dict) for downstream schemas.
-                # Some models output a short string; we wrap it.
+                # 确保 result 为对象（dict），满足下游 schema 要求。
+                # 某些模型会输出短字符串，这里做包装处理。
                 if isinstance(t, dict):
                     result = t.get("result")
                     if result is None:
@@ -370,7 +367,7 @@ async def generate_random_case_payload() -> tuple[dict[str, Any], dict[str, Any]
 
         break
     else:
-        # retries exhausted
+        # 重试次数耗尽
         if isinstance(last_err, BusinessError):
             raise last_err
         if isinstance(last_err, httpx.TimeoutException):

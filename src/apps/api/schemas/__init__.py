@@ -1,4 +1,4 @@
-"""Pydantic schemas for API request/response validation."""
+"""用于 API 请求/响应校验的 Pydantic Schema。"""
 
 from src.apps.api.schemas.auth import LoginCredentials, Token, UserResponse
 from src.apps.api.schemas.cases import CaseDetail, CaseDetailFull, CaseListItem

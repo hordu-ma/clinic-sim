@@ -372,8 +372,14 @@ async def chat_stream(
         async def intent_generator() -> AsyncGenerator[str, None]:
             yield f"data: {json.dumps({'content': ack, 'done': False}, ensure_ascii=False)}\n\n"
             if system_texts:
-                yield f"data: {json.dumps({'role': 'system', 'content': system_content, 'done': False}, ensure_ascii=False)}\n\n"
-            yield f"data: {json.dumps({'content': '', 'done': True, 'latency_ms': 0}, ensure_ascii=False)}\n\n"
+                system_chunk = {
+                    "role": "system",
+                    "content": system_content,
+                    "done": False,
+                }
+                yield (f"data: {json.dumps(system_chunk, ensure_ascii=False)}\n\n")
+            done_chunk = {"content": "", "done": True, "latency_ms": 0}
+            yield (f"data: {json.dumps(done_chunk, ensure_ascii=False)}\n\n")
             yield "data: [DONE]\n\n"
 
         return StreamingResponse(

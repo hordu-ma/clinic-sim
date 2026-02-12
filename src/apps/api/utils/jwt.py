@@ -1,4 +1,4 @@
-"""JWT token utilities."""
+"""JWT 令牌工具。"""
 
 from datetime import UTC, datetime, timedelta
 
