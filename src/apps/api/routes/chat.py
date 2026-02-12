@@ -20,6 +20,7 @@ from src.apps.api.logging_config import logger
 from src.apps.api.models import Case, Message, Session
 from src.apps.api.rate_limit import limiter
 from src.apps.api.schemas.chat import ChatRequest
+from src.apps.api.services.test_intents import extract_test_intent, format_test_result_text
 
 router = APIRouter()
 
@@ -254,6 +255,7 @@ async def chat_stream(
         .options(
             selectinload(Session.case),
             selectinload(Session.messages),
+            selectinload(Session.test_requests),
         )
         .where(Session.id == data.session_id)
     )
@@ -279,8 +281,112 @@ async def chat_stream(
             detail=f"Session is {session.status}, cannot continue chat",
         )
 
-    # 4. 构建消息
+    # 3.5 检查意图（下检查单/要结果）：用确定性逻辑处理，保证可审计和稳定体验
     case = session.case
+    available_tests = case.available_tests or []
+    available_test_types = {
+        str(t.get("type")) for t in available_tests if isinstance(t, dict) and t.get("type")
+    }
+    intent = extract_test_intent(data.message, available_test_types)
+
+    if intent is not None:
+        # Always persist the doctor's message.
+        user_tokens = estimate_tokens(data.message)
+        db.add(
+            Message(
+                session_id=data.session_id,
+                role="user",
+                content=data.message,
+                tokens=user_tokens,
+            )
+        )
+
+        # Build a deterministic patient ack.
+        if intent.kind == "order":
+            ack = "好的，我去做检查。"
+        else:
+            ack = "好的，我把检查报告单内容给您。"
+
+        assistant_msg = Message(
+            session_id=data.session_id,
+            role="assistant",
+            content=ack,
+            tokens=estimate_tokens(ack),
+            latency_ms=0,
+        )
+        db.add(assistant_msg)
+
+        # For each requested test type, either create/find the TestRequest then expose result.
+        from src.apps.api.models import TestRequest
+
+        system_texts: list[str] = []
+        for test_type in intent.test_types:
+            # Find existing request
+            existing = next(
+                (tr for tr in (session.test_requests or []) if tr.test_type == test_type),
+                None,
+            )
+
+            if intent.kind == "order" and existing is None:
+                test_info = next(
+                    (
+                        t
+                        for t in available_tests
+                        if isinstance(t, dict) and t.get("type") == test_type
+                    ),
+                    None,
+                )
+                if test_info is None:
+                    continue
+                new_req = TestRequest(
+                    session_id=data.session_id,
+                    test_type=test_type,
+                    test_name=str(test_info.get("name", test_type)),
+                    result=test_info.get("result", {}) or {},
+                )
+                db.add(new_req)
+                session.test_requests.append(new_req)
+                existing = new_req
+
+            if existing is None:
+                system_texts.append(f"[检查结果] {test_type}: 尚未完成（需要先申请检查）")
+                continue
+
+            system_texts.append(format_test_result_text(existing.test_name, existing.result or {}))
+
+        # Persist system message for replay.
+        if system_texts:
+            system_content = "\n\n".join(system_texts)
+            db.add(
+                Message(
+                    session_id=data.session_id,
+                    role="system",
+                    content=system_content,
+                    tokens=estimate_tokens(system_content),
+                    latency_ms=0,
+                )
+            )
+
+        await db.commit()
+
+        async def intent_generator() -> AsyncGenerator[str, None]:
+            yield f"data: {json.dumps({'content': ack, 'done': False}, ensure_ascii=False)}\n\n"
+            if system_texts:
+                yield f"data: {json.dumps({'role': 'system', 'content': system_content, 'done': False}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'content': '', 'done': True, 'latency_ms': 0}, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+
+        return StreamingResponse(
+            intent_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
+    # 4. 构建消息
     history = sorted(session.messages, key=lambda m: m.created_at)
     messages = build_messages(case, history, data.message)
     prompt_tokens = estimate_prompt_tokens(messages)
@@ -368,46 +474,44 @@ async def chat_stream(
         latency_ms = int((time.time() - start_time) * 1000)
         yield f"data: {json.dumps({'content': '', 'done': True, 'latency_ms': latency_ms})}\n\n"
 
-        # 7. 落库：保存用户消息和助手回复
-        if full_response:
-            # 使用新的数据库会话来保存消息（避免上下文管理器问题）
-            from src.apps.api.dependencies import AsyncSessionLocal
+        # 7. 落库：保存用户消息和助手回复（尽量不丢用户输入）
+        from src.apps.api.dependencies import AsyncSessionLocal
 
-            async with AsyncSessionLocal() as save_db:
-                try:
-                    # 保存用户消息
-                    user_msg = Message(
+        async with AsyncSessionLocal() as save_db:
+            try:
+                save_db.add(
+                    Message(
                         session_id=data.session_id,
                         role="user",
                         content=data.message,
                         tokens=user_tokens,
                     )
-                    save_db.add(user_msg)
+                )
 
-                    # 保存助手回复
-                    assistant_msg = Message(
-                        session_id=data.session_id,
-                        role="assistant",
-                        content=full_response,
-                        tokens=estimate_tokens(full_response),
-                        latency_ms=latency_ms,
+                if full_response:
+                    save_db.add(
+                        Message(
+                            session_id=data.session_id,
+                            role="assistant",
+                            content=full_response,
+                            tokens=estimate_tokens(full_response),
+                            latency_ms=latency_ms,
+                        )
                     )
-                    save_db.add(assistant_msg)
 
-                    await save_db.commit()
-                    logger.debug(
-                        "对话消息已保存",
-                        session_id=data.session_id,
-                        latency_ms=latency_ms,
-                    )
-                except Exception as e:
-                    # 落库失败不影响用户体验，但应记录日志
-                    await save_db.rollback()
-                    logger.error(
-                        "保存对话消息失败",
-                        session_id=data.session_id,
-                        error=str(e),
-                    )
+                await save_db.commit()
+                logger.debug(
+                    "对话消息已保存",
+                    session_id=data.session_id,
+                    latency_ms=latency_ms,
+                )
+            except Exception as e:
+                await save_db.rollback()
+                logger.error(
+                    "保存对话消息失败",
+                    session_id=data.session_id,
+                    error=str(e),
+                )
 
         # 发送最终的 [DONE] 信号
         yield "data: [DONE]\n\n"

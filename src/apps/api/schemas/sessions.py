@@ -49,7 +49,7 @@ class MessageItem(BaseModel):
     """消息项。"""
 
     id: int = Field(..., description="消息ID")
-    role: Literal["user", "assistant"] = Field(..., description="角色")
+    role: Literal["user", "assistant", "system"] = Field(..., description="角色")
     content: str = Field(..., description="消息内容")
     tokens: int | None = Field(None, description="token数量")
     latency_ms: int | None = Field(None, description="响应延迟（毫秒）")

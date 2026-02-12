@@ -135,7 +135,7 @@ const handleSubmitDiagnosis = async () => {
       sessionId.value,
       {
         diagnosis: diagnosisContent.value,
-      }
+      },
     );
     showDiagnosisDialog.value = false;
 
@@ -276,7 +276,19 @@ const sendMessage = async () => {
               shouldStop = true;
               break;
             }
-            if (parsed.content) {
+
+            // system event (e.g. test results)
+            if (parsed.role === "system" && parsed.content) {
+              messages.value.push({
+                id: Date.now(),
+                role: "system",
+                content: parsed.content,
+                tokens: null,
+                latency_ms: null,
+                created_at: new Date().toISOString(),
+              });
+              scrollToBottom();
+            } else if (parsed.content) {
               const assistantMsg = messages.value[assistantMsgIndex];
               if (assistantMsg) {
                 assistantMsg.content += parsed.content;
@@ -537,7 +549,9 @@ const sendMessage = async () => {
   line-height: 1.6;
   font-size: 14.5px;
   border-left: 3px solid #fbbf24;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.12),
+    0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
 .message-item.user .content {

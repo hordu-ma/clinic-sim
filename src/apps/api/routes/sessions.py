@@ -320,11 +320,13 @@ async def get_session(
     )
 
 
-def _normalize_message_role(role: str) -> Literal["user", "assistant"]:
+def _normalize_message_role(role: str) -> Literal["user", "assistant", "system"]:
     if role == "user":
         return "user"
     if role == "assistant":
         return "assistant"
+    if role == "system":
+        return "system"
     raise HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail=f"Invalid message role in DB: {role}",
