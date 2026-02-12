@@ -1,44 +1,50 @@
-# Repository Guidelines
+# 仓库协作规范
 
-## Project Structure & Module Organization
-- `src/apps/api/`: FastAPI backend (`routes/`, `schemas/`, `models/`, `services/`, `migrations/`).
-- `src/apps/web/`: Vue 3 + Vite frontend (`src/views`, `src/api`, `src/stores`, `src/router`).
-- `src/infra/compose/`: Docker Compose files for dev and prod (`dev.yml`, `prod-a.yml`, `prod-b.yml`).
-- `src/cases/`: seed case JSON files.
-- `tests/`: backend pytest suite (integration and service/config tests).
-- `src/scripts/`: utility scripts (for example `start_vllm_dev.sh`, `import_cases.py`).
+## 项目结构与模块组织
 
-## Build, Test, and Development Commands
-- Backend deps: `uv sync --extra dev`
-- Frontend deps: `cd src/apps/web && npm install`
-- Start local stack (API + PostgreSQL + MinIO): `docker compose -f src/infra/compose/dev.yml up -d`
-- Start frontend dev server: `cd src/apps/web && npm run dev`
-- Run backend tests: `pytest`
-- Run coverage: `pytest --cov=src/apps/api --cov-report=term-missing`
-- Lint backend: `ruff check .`
-- Type-check backend: `mypy src`
-- Build frontend: `cd src/apps/web && npm run build`
+- `src/apps/api/`：FastAPI 后端（`routes/`、`schemas/`、`models/`、`services/`、`migrations/`）。
+- `src/apps/web/`：Vue 3 + Vite 前端（`src/views`、`src/api`、`src/stores`、`src/router`）。
+- `src/infra/compose/`：开发与生产环境的 Docker Compose 文件（`dev.yml`、`prod-a.yml`、`prod-b.yml`）。
+- `src/cases/`：病例种子 JSON 文件。
+- `tests/`：后端 pytest 测试套件（集成测试与服务/配置测试）。
+- `src/scripts/`：工具脚本（例如 `start_vllm_dev.sh`、`import_cases.py`）。
 
-## Coding Style & Naming Conventions
-- Python: 4-space indentation, type hints for new/changed code, max line length `100` (Ruff).
-- Python modules/functions: `snake_case`; classes/Pydantic models: `PascalCase`; constants: `UPPER_SNAKE_CASE`.
-- Vue/TypeScript: keep view components in `src/views` with `PascalCase.vue` names (for example `SessionList.vue`); API wrappers in `src/api/*.ts`.
-- Keep route/schema/model names aligned across backend layers (`routes/sessions.py` ↔ `schemas/sessions.py` ↔ `models/sessions.py`).
+## 构建、测试与开发命令
 
-## Testing Guidelines
-- Framework: `pytest` with `pytest-asyncio` (`asyncio_mode=auto`).
-- Naming: files `test_*.py`, classes `Test*`, functions `test_*` (enforced in `pyproject.toml`).
-- Prefer integration-style tests for API flow (`tests/test_integration.py`) and focused unit tests for services (`tests/test_scoring.py`).
-- Mock external LLM calls in tests; do not hit real model endpoints in CI.
+- 后端依赖：`uv sync --extra dev`
+- 前端依赖：`cd src/apps/web && npm install`
+- 启动本地栈（API + PostgreSQL + MinIO）：`docker compose -f src/infra/compose/dev.yml up -d`
+- 启动前端开发服务器：`cd src/apps/web && npm run dev`
+- 运行后端测试：`pytest`
+- 运行覆盖率：`pytest --cov=src/apps/api --cov-report=term-missing`
+- 后端静态检查：`ruff check .`
+- 后端类型检查：`mypy src`
+- 构建前端：`cd src/apps/web && npm run build`
 
-## Commit & Pull Request Guidelines
-- Follow Conventional Commit style seen in history: `feat: ...`, `fix: ...`, `refactor(scope): ...`, `docs: ...`.
-- Keep commits scoped and atomic (separate API, web, and infra changes when possible).
-- PRs should include a clear summary, linked issue/task (if available), and test evidence (`pytest`, frontend build output).
-- Add screenshots or GIFs for UI updates.
-- Add migration notes when touching `src/apps/api/migrations/`.
+## 编码风格与命名规范
 
-## Security & Configuration Tips
-- Copy `.env.example` to `.env`; never commit real secrets.
-- Required sensitive vars include `JWT_SECRET`, DB/MinIO passwords, and `LLM_BASE_URL`.
-- In production, disable Swagger and avoid default dev credentials.
+- Python：4 空格缩进；新建/修改代码需补充类型注解；最大行宽 `100`（Ruff）。
+- Python 模块/函数：`snake_case`；类/Pydantic 模型：`PascalCase`；常量：`UPPER_SNAKE_CASE`。
+- Vue/TypeScript：视图组件放在 `src/views`，文件名使用 `PascalCase.vue`（例如 `SessionList.vue`）；API 封装放在 `src/api/*.ts`。
+- 保持后端分层命名一致（`routes/sessions.py` ↔ `schemas/sessions.py` ↔ `models/sessions.py`）。
+
+## 测试规范
+
+- 测试框架：`pytest` + `pytest-asyncio`（`asyncio_mode=auto`）。
+- 命名规范：文件 `test_*.py`，类 `Test*`，函数 `test_*`（由 `pyproject.toml` 约束）。
+- 优先使用 API 流程的集成测试（`tests/test_integration.py`）与服务层的聚焦单元测试（`tests/test_scoring.py`）。
+- 测试中应 mock 外部 LLM 调用；CI 中不要请求真实模型端点。
+
+## Commit 与 Pull Request 规范
+
+- 遵循仓库历史中的 Conventional Commit 风格：`feat: ...`、`fix: ...`、`refactor(scope): ...`、`docs: ...`。
+- 保持提交范围清晰且原子化（尽量分离 API、前端、基础设施改动）。
+- PR 需包含清晰摘要、关联 issue/任务（如有）以及测试证据（`pytest`、前端构建输出）。
+- UI 更新请附截图或 GIF。
+- 涉及 `src/apps/api/migrations/` 时请补充迁移说明。
+
+## 安全与配置建议
+
+- 复制 `.env.example` 为 `.env`；严禁提交真实密钥。
+- 必填敏感变量包括 `JWT_SECRET`、数据库/MinIO 密码、`LLM_BASE_URL`。
+- 生产环境请关闭 Swagger，避免使用默认开发凭据。
